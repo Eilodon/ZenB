@@ -1,0 +1,5 @@
+{
+  "name": "ZenB",
+  "description": "A high-performance, minimalist guided breathing application using WebGL and procedural audio.",
+  "requestFramePermissions": []
+}
