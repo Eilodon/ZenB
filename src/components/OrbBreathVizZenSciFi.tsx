@@ -7,8 +7,9 @@ import { useSpring } from '@react-spring/three';
 import * as THREE from 'three';
 import { BreathPhase, ColorTheme, QualityTier } from '../types';
 import { AIConnectionStatus } from '../services/RustKernelBridge';
-import { setSpatialBreathParams } from '../services/audio'; // [NEW] Spatial Audio Sync
-import { ENHANCED_CORE_VERT, getEnhancedFragShader } from '../shaders/enhanced-orb-shaders'; // [ENHANCED] Design System V2
+import { setSpatialBreathParams } from '../services/audio';
+import { ENHANCED_CORE_VERT_V2, getEnhancedFragShaderV2, ENHANCED_THEMES_V2 } from '../shaders/enhanced-orb-shaders-v2';
+import { calculateBreathScale, calculateMaterialProperties } from '../utils/breathing-curves';
 
 type Props = {
   phase: BreathPhase;
@@ -20,25 +21,28 @@ type Props = {
   entropyRef?: React.MutableRefObject<number>;
   aiStatus?: AIConnectionStatus;
 };
-// ... THEMES definition (preserved) ...
-const THEMES: Record<ColorTheme, { deep: THREE.Color; mid: THREE.Color; glow: THREE.Color; accent: THREE.Color }> = {
+// ENHANCED THEMES V2 - with complement colors for depth
+const THEMES: Record<ColorTheme, { deep: THREE.Color; mid: THREE.Color; glow: THREE.Color; accent: THREE.Color; complement: THREE.Color }> = {
   warm: {
-    deep: new THREE.Color('#2b0505'),
-    mid: new THREE.Color('#a3341e'),
-    glow: new THREE.Color('#ffd39a'),
-    accent: new THREE.Color('#ff8f6a'),
+    deep: new THREE.Color(ENHANCED_THEMES_V2.warm.deep),
+    mid: new THREE.Color(ENHANCED_THEMES_V2.warm.mid),
+    glow: new THREE.Color(ENHANCED_THEMES_V2.warm.glow),
+    accent: new THREE.Color(ENHANCED_THEMES_V2.warm.accent),
+    complement: new THREE.Color(ENHANCED_THEMES_V2.warm.complement),
   },
   cool: {
-    deep: new THREE.Color('#00121a'),
-    mid: new THREE.Color('#0b4f6e'),
-    glow: new THREE.Color('#7afff3'),
-    accent: new THREE.Color('#1ad3ff'),
+    deep: new THREE.Color(ENHANCED_THEMES_V2.cool.deep),
+    mid: new THREE.Color(ENHANCED_THEMES_V2.cool.mid),
+    glow: new THREE.Color(ENHANCED_THEMES_V2.cool.glow),
+    accent: new THREE.Color(ENHANCED_THEMES_V2.cool.accent),
+    complement: new THREE.Color(ENHANCED_THEMES_V2.cool.complement),
   },
   neutral: {
-    deep: new THREE.Color('#0d0d12'),
-    mid: new THREE.Color('#5e5e6e'),
-    glow: new THREE.Color('#ffffff'),
-    accent: new THREE.Color('#c8d6e5'),
+    deep: new THREE.Color(ENHANCED_THEMES_V2.neutral.deep),
+    mid: new THREE.Color(ENHANCED_THEMES_V2.neutral.mid),
+    glow: new THREE.Color(ENHANCED_THEMES_V2.neutral.glow),
+    accent: new THREE.Color(ENHANCED_THEMES_V2.neutral.accent),
+    complement: new THREE.Color(ENHANCED_THEMES_V2.neutral.complement),
   },
 };
 
@@ -56,110 +60,7 @@ function resolveTier(q: QualityTier) {
   return { dpr: Math.min(dpr, 1.5), seg: 40, halo: true, ring: false, octaves: 3 };
 }
 
-// ... CORE_VERT (preserved) ...
-const CORE_VERT = `
-varying vec3 vPos;
-varying vec3 vNormal;
-uniform float uTime;
-uniform float uAiPulse;
 
-void main() {
-  vNormal = normalMatrix * normal;
-  
-  // Geometric Distortion when AI speaks (The "Voice" effect)
-  vec3 pos = position;
-  if (uAiPulse > 0.1) {
-      float noise = sin(pos.y * 10.0 + uTime * 20.0) * cos(pos.x * 10.0 + uTime * 15.0);
-      pos += normal * noise * uAiPulse * 0.08;
-  }
-  
-  vPos = pos;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
-}
-`;
-
-// Inject octaves into fragment shader
-const getFragShader = (octaves: number) => `
-precision highp float;
-varying vec3 vPos;
-varying vec3 vNormal;
-uniform float uTime;
-uniform float uBreath;
-uniform float uEntropy;
-uniform vec3 uDeep;
-uniform vec3 uMid;
-uniform vec3 uGlow;
-uniform vec3 uAccent;
-uniform float uAiPulse; 
-
-float hash(vec3 p){
-  p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
-  p *= 17.0;
-  return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
-}
-
-float noise(vec3 p){
-  vec3 i = floor(p);
-  vec3 f = fract(p);
-  f = f*f*(3.0-2.0*f);
-  float n000 = hash(i + vec3(0,0,0));
-  float n100 = hash(i + vec3(1,0,0));
-  float n010 = hash(i + vec3(0,1,0));
-  float n110 = hash(i + vec3(1,1,0));
-  float n001 = hash(i + vec3(0,0,1));
-  float n101 = hash(i + vec3(1,0,1));
-  float n011 = hash(i + vec3(0,1,1));
-  float n111 = hash(i + vec3(1,1,1));
-  float nx00 = mix(n000, n100, f.x);
-  float nx10 = mix(n010, n110, f.x);
-  float nx01 = mix(n001, n101, f.x);
-  float nx11 = mix(n011, n111, f.x);
-  float nxy0 = mix(nx00, nx10, f.y);
-  float nxy1 = mix(nx01, nx11, f.y);
-  return mix(nxy0, nxy1, f.z);
-}
-
-float fbm(vec3 p){
-  float v = 0.0;
-  float a = 0.55;
-  // Adaptive Octaves via JS Injection
-  for(int i=0;i<${octaves};i++){ 
-    v += a * noise(p);
-    p *= 2.02;
-    a *= 0.5;
-  }
-  return v;
-}
-
-void main(){
-  vec3 n = normalize(vNormal);
-  vec3 p = vPos * 1.2;
-  float t = uTime * 0.22;
-  float f = fbm(p + vec3(0.0, t, t*0.7));
-  float fil = smoothstep(0.45, 0.85, f);
-  vec3 base = mix(uDeep, uMid, fil);
-  vec3 glow = mix(base, uGlow, clamp(uBreath, 0.0, 1.0) * 0.75);
-  float shimmer = fbm(p * 2.2 + vec3(t*2.0)) * 0.5 + 0.5;
-  
-  vec3 aiColor = mix(vec3(0.0, 1.0, 0.6), vec3(0.6, 0.2, 1.0), smoothstep(0.4, 1.0, uAiPulse)); 
-  vec3 accent = mix(uAccent, aiColor, uAiPulse);
-  
-  glow = mix(glow, aiColor, uAiPulse * 0.6);
-
-  if (uAiPulse > 0.05) {
-     float grid = abs(sin(vPos.x * 20.0)) + abs(sin(vPos.y * 20.0));
-     glow += aiColor * (1.0 - smoothstep(0.0, 0.1, grid)) * uAiPulse * 0.5;
-  }
-
-  glow = mix(glow, accent, shimmer * (clamp(uEntropy, 0.0, 1.0) * 0.18 + uAiPulse * 0.4));
-  
-  float fres = pow(1.0 - abs(dot(n, vec3(0.0,0.0,1.0))), 2.5);
-  float energy = (0.35 + 0.95 * uBreath) * (0.65 + 0.35 * fil);
-  vec3 col = glow * energy + uGlow * fres * (0.35 + 0.5 * uBreath);
-  float alpha = 0.25 + 0.55 * uBreath + 0.15 * fil;
-  gl_FragColor = vec4(col, alpha);
-}
-`;
 
 function ZenOrb(props: Props) {
   const { phase, theme, quality, reduceMotion, isActive, progressRef, entropyRef, aiStatus } = props;
@@ -168,14 +69,17 @@ function ZenOrb(props: Props) {
   const { gl } = useThree(); // Access WebGL Context
 
   const group = useRef<THREE.Group>(null);
+  const haloRef = useRef<THREE.Mesh>(null);  // [PHASE 3] Secondary motion
+  const ringRef = useRef<THREE.Mesh>(null);  // [PHASE 3] Secondary motion
   const shellMat = useRef<THREE.MeshPhysicalMaterial>(null);
   const coreMat = useRef<THREE.ShaderMaterial>(null);
 
   const breathRef = useRef(0);
   const entropySmoothRef = useRef(0);
   const aiPulseRef = useRef(0);
+  const prevScaleRef = useRef(1.35);  // [PHASE 3] Track previous scale for lag calculation
 
-  // [P0.2 UPGRADE] Spring physics for material properties (organic transitions)
+  // [SMOOTH MOTION] Spring physics tuned for butter-smooth animation (no overshoot)
   const [materialSpring, materialApi] = useSpring(() => ({
     scale: 1.35,
     roughness: 0.55,
@@ -185,10 +89,10 @@ function ZenOrb(props: Props) {
     thickness: 0.3,
     attenuationDistance: 1.8,
     config: {
-      mass: 1.2,
-      tension: 180,
-      friction: 26,
-      clamp: false, // Allow 8-12% overshoot for organic feel
+      mass: 1.0,       // Lighter mass for faster response
+      tension: 120,    // Lower tension for smoother motion
+      friction: 40,    // Higher friction to prevent oscillation
+      clamp: true,     // NO overshoot - essential for smooth feel
     },
   }));
 
@@ -221,9 +125,10 @@ function ZenOrb(props: Props) {
 
     let targetBreath = 0;
     if (isActive) {
-      if (phase === 'inhale') targetBreath = p;
+      // [PHASE 3] Use eased breath curves with anticipation/follow-through
+      if (phase === 'inhale') targetBreath = p * p; // ease-in
       else if (phase === 'holdIn') targetBreath = 1;
-      else if (phase === 'exhale') targetBreath = 1 - p;
+      else if (phase === 'exhale') targetBreath = 1 - (1 - (1 - p) * (1 - p)); // ease-out
       else targetBreath = 0;
     } else {
       targetBreath = (Math.sin(time * 0.7) * 0.5 + 0.5) * 0.35;
@@ -247,27 +152,48 @@ function ZenOrb(props: Props) {
     const breath = breathRef.current;
     const entropy = THREE.MathUtils.clamp(entropySmoothRef.current, 0, 1);
 
-    // [P0.2 UPGRADE] Update spring targets based on breath state
+    // [SMOOTH MOTION] Use smooth easing without overshoot for butter-smooth feel
     const baseScale = 1.35;
-    const pulse = 0.14 * breath + 0.02 * Math.sin(time * 2.2);
+    const scaleRange = 0.12; // 1.35 to 1.47 (about 9% expansion)
+    const animatedScale = baseScale + (breath * scaleRange);
+
+    // [PHASE 3] Use calculateMaterialProperties for dynamic glass effects
+    const matProps = calculateMaterialProperties(breath, aiPulseRef.current);
 
     materialApi.start({
-      scale: baseScale + pulse,
-      roughness: THREE.MathUtils.lerp(0.55, 0.18, breath),
-      transmission: THREE.MathUtils.lerp(0.45, 0.92, breath),
-      clearcoat: THREE.MathUtils.lerp(0.35, 1.0, breath),
-      clearcoatRoughness: THREE.MathUtils.lerp(0.5, 0.1, breath),
-      thickness: THREE.MathUtils.lerp(0.3, 0.7, breath),
+      scale: animatedScale,
+      roughness: matProps.roughness,
+      transmission: matProps.transmission,
+      clearcoat: matProps.clearcoat,
+      clearcoatRoughness: matProps.clearcoatRoughness,
+      thickness: matProps.thickness,
       attenuationDistance: THREE.MathUtils.lerp(1.8, 0.9, breath),
       immediate: false, // Use spring physics
     });
 
     // Apply spring values to group scale
+    const currentScale = materialSpring.scale.get();
     if (group.current) {
-      group.current.scale.setScalar(materialSpring.scale.get());
+      group.current.scale.setScalar(currentScale);
       group.current.rotation.y += delta * 0.18 * motion;
       group.current.rotation.x = Math.sin(time * 0.15) * 0.08 * motion;
     }
+
+    // [PHASE 3] Secondary motion for halo (lags behind with larger scale)
+    if (haloRef.current) {
+      const haloScale = prevScaleRef.current + (currentScale - prevScaleRef.current) * 0.15; // 85% lag
+      haloRef.current.scale.setScalar(haloScale * 1.02); // Slightly larger amplification
+    }
+
+    // [PHASE 3] Secondary motion for ring (lags more, different rotation)
+    if (ringRef.current) {
+      const ringScale = prevScaleRef.current + (currentScale - prevScaleRef.current) * 0.1; // 90% lag
+      ringRef.current.scale.setScalar(ringScale);
+      ringRef.current.rotation.z += delta * 0.08 * motion; // Independent slow rotation
+    }
+
+    // Update previous scale for next frame
+    prevScaleRef.current = currentScale;
 
     // Apply spring values to material
     if (shellMat.current) {
@@ -294,12 +220,13 @@ function ZenOrb(props: Props) {
       coreMat.current.uniforms.uMid.value.copy(colors.mid);
       coreMat.current.uniforms.uGlow.value.copy(colors.glow);
       coreMat.current.uniforms.uAccent.value.copy(colors.accent);
+      coreMat.current.uniforms.uComplement.value.copy(colors.complement);
       coreMat.current.uniforms.uAiPulse.value = aiPulseRef.current;
     }
   });
 
-  // [ENHANCED] Use enhanced fragment shader for better visual quality
-  const fragShader = useMemo(() => getEnhancedFragShader(tier.octaves), [tier.octaves]);
+  // [ENHANCED V2] Use enhanced v2 fragment shader for premium visual quality
+  const fragShader = useMemo(() => getEnhancedFragShaderV2(tier.octaves), [tier.octaves]);
 
   return (
     <group ref={group}>
@@ -324,7 +251,7 @@ function ZenOrb(props: Props) {
         <sphereGeometry args={[0.72, Math.max(18, Math.floor(tier.seg * 0.8)), Math.max(18, Math.floor(tier.seg * 0.8))]} />
         <shaderMaterial
           ref={coreMat}
-          vertexShader={ENHANCED_CORE_VERT}
+          vertexShader={ENHANCED_CORE_VERT_V2}
           fragmentShader={fragShader}
           transparent
           depthWrite={false}
@@ -337,13 +264,14 @@ function ZenOrb(props: Props) {
             uMid: { value: colors.mid.clone() },
             uGlow: { value: colors.glow.clone() },
             uAccent: { value: colors.accent.clone() },
+            uComplement: { value: colors.complement.clone() },
             uAiPulse: { value: 0 },
           }}
         />
       </mesh>
 
       {tier.halo && (
-        <mesh>
+        <mesh ref={haloRef}>
           <sphereGeometry args={[1.08, Math.max(18, Math.floor(tier.seg * 0.5)), Math.max(18, Math.floor(tier.seg * 0.5))]} />
           <meshBasicMaterial
             color={colors.glow}
@@ -357,7 +285,7 @@ function ZenOrb(props: Props) {
       )}
 
       {tier.ring && (
-        <mesh rotation={[Math.PI / 2.2, 0, 0]}>
+        <mesh ref={ringRef} rotation={[Math.PI / 2.2, 0, 0]}>
           <torusGeometry args={[1.15, 0.015, 10, 120]} />
           <meshBasicMaterial
             color={colors.accent}
