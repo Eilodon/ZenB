@@ -21,7 +21,7 @@ const TOKENS = {
 };
 
 // --- SECURITY CUE ---
-interface SecurityCueProps { mode: 'on-device'|'hybrid'|'cloud' }
+interface SecurityCueProps { mode: 'on-device' | 'hybrid' | 'cloud' }
 
 export const SecurityCue: React.FC<SecurityCueProps> = ({ mode }) => {
   const map = {
@@ -29,12 +29,12 @@ export const SecurityCue: React.FC<SecurityCueProps> = ({ mode }) => {
     'hybrid': { color: TOKENS.colors.dark.primary, label: 'Hybrid', icon: Lock },
     'cloud': { color: '#64748B', label: 'Cloud', icon: Lock },
   } as const;
-  
+
   const cfg = map[mode];
   const Icon = cfg.icon;
 
   return (
-    <div 
+    <div
       className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-medium tracking-wide backdrop-blur-sm bg-black/20"
       style={{ borderColor: cfg.color, color: cfg.color }}
       aria-label={`Privacy: ${cfg.label}`}
@@ -47,10 +47,10 @@ export const SecurityCue: React.FC<SecurityCueProps> = ({ mode }) => {
 };
 
 // --- LIVE RESULT CARD (Streaming) ---
-interface LiveResultCardProps { 
-  title: string; 
-  content?: string; 
-  generating?: boolean; 
+interface LiveResultCardProps {
+  title: string;
+  content?: string;
+  generating?: boolean;
   onDismiss?: () => void;
   mode?: 'on-device' | 'hybrid' | 'cloud';
 }
@@ -73,8 +73,8 @@ export const LiveResultCard: React.FC<LiveResultCardProps> = ({
   useEffect(() => {
     if (!content) return;
     if (generating) {
-        setStream("");
-        return;
+      setStream("");
+      return;
     }
 
     // Simple typewriter effect for new content
@@ -93,20 +93,20 @@ export const LiveResultCard: React.FC<LiveResultCardProps> = ({
 
   return (
     <motion.div
-        className="relative w-full max-w-sm rounded-[16px] p-5 backdrop-blur-xl bg-white/[0.05] border border-white/10 shadow-2xl transition-all"
-        role="region"
-        aria-live="polite"
-        variants={ANIMATIONS.variants.scaleIn}
-        initial="initial"
-        animate="animate"
-        exit="exit"
+      className="relative w-full max-w-sm rounded-[16px] p-5 backdrop-blur-xl bg-white/[0.05] border border-white/10 shadow-2xl transition-all"
+      role="region"
+      aria-live="polite"
+      variants={ANIMATIONS.variants.scaleIn}
+      initial="initial"
+      animate="animate"
+      exit="exit"
     >
       <div className="absolute top-4 right-4 flex items-center gap-3">
         <SecurityCue mode={mode} />
         {onDismiss && (
-            <button onClick={onDismiss} className="p-1 hover:bg-white/10 rounded-full text-white/40 hover:text-white transition-colors">
-                <X size={14} />
-            </button>
+          <button onClick={onDismiss} className="p-1 hover:bg-white/10 rounded-full text-white/40 hover:text-white transition-colors">
+            <X size={14} />
+          </button>
         )}
       </div>
 
@@ -117,92 +117,92 @@ export const LiveResultCard: React.FC<LiveResultCardProps> = ({
 
       <div className="min-h-[60px] text-sm leading-relaxed text-[#EDEDED]/90 font-light font-sans">
         {generating ? (
-            <div className="space-y-2 animate-pulse">
-                <div className="h-4 bg-white/5 rounded w-3/4"></div>
-                <div className="h-4 bg-white/5 rounded w-1/2"></div>
-            </div>
+          <div className="space-y-2 animate-pulse">
+            <div className="h-4 bg-white/5 rounded w-3/4"></div>
+            <div className="h-4 bg-white/5 rounded w-1/2"></div>
+          </div>
         ) : (
-            <p>
-               {displayedText}
-               {isGen && <span className="inline-block w-1.5 h-3 ml-1 bg-blue-500 animate-pulse align-middle"/>}
-            </p>
+          <p>
+            {displayedText}
+            {isGen && <span className="inline-block w-1.5 h-3 ml-1 bg-blue-500 animate-pulse align-middle" />}
+          </p>
         )}
       </div>
-      
+
       {!generating && content && (
         <div className="mt-4 flex gap-2 pt-3 border-t border-white/5">
-            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[10px] text-white/60 transition-colors">
-                <Copy size={12} /> Copy
-            </button>
-             <div className="ml-auto flex gap-1">
-                <button className="p-1.5 rounded-lg hover:bg-white/5 text-white/40 hover:text-green-400 transition-colors"><ThumbsUp size={12}/></button>
-                <button className="p-1.5 rounded-lg hover:bg-white/5 text-white/40 hover:text-red-400 transition-colors"><ThumbsDown size={12}/></button>
-             </div>
+          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[10px] text-white/60 transition-colors">
+            <Copy size={12} /> Copy
+          </button>
+          <div className="ml-auto flex gap-1">
+            <button className="p-1.5 rounded-lg hover:bg-white/5 text-white/40 hover:text-green-400 transition-colors"><ThumbsUp size={12} /></button>
+            <button className="p-1.5 rounded-lg hover:bg-white/5 text-white/40 hover:text-red-400 transition-colors"><ThumbsDown size={12} /></button>
+          </div>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 };
 
 // --- KINETIC SNACKBAR ---
-interface KineticSnackbarProps { 
-    kind?: 'success' | 'warn' | 'error'; 
-    text: string; 
-    onClose: () => void; 
+interface KineticSnackbarProps {
+  kind?: 'success' | 'warn' | 'error';
+  text: string;
+  onClose: () => void;
 }
 
 export const KineticSnackbar: React.FC<KineticSnackbarProps> = ({
-    kind = 'success',
-    text,
-    onClose
+  kind = 'success',
+  text,
+  onClose
 }) => {
   const IconMap = {
-      success: Check,
-      warn: AlertTriangle,
-      error: Info // or alert
+    success: Check,
+    warn: AlertTriangle,
+    error: Info // or alert
   };
   const Icon = IconMap[kind];
 
   const colors = {
-      success: `border-[${COLORS.semantic.success.DEFAULT}]/50 text-[${COLORS.semantic.success[100]}]`,
-      warn: `border-[${COLORS.semantic.warning.DEFAULT}]/50 text-[${COLORS.semantic.warning[100]}]`,
-      error: `border-[${COLORS.semantic.error.DEFAULT}]/50 text-[${COLORS.semantic.error[100]}]`
+    success: `border-[${COLORS.semantic.success.DEFAULT}]/50 text-[${COLORS.semantic.success[100]}]`,
+    warn: `border-[${COLORS.semantic.warning.DEFAULT}]/50 text-[${COLORS.semantic.warning[100]}]`,
+    error: `border-[${COLORS.semantic.error.DEFAULT}]/50 text-[${COLORS.semantic.error[100]}]`
   };
 
   return (
     <motion.div
-        role="status"
-        className={clsx(
-            "fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] min-w-[300px] max-w-[90vw] px-4 py-3 rounded-[12px] border backdrop-blur-xl bg-white/[0.05] shadow-2xl flex items-center gap-3",
-            colors[kind]
-        )}
-        variants={ANIMATIONS.variants.snackbar}
-        initial="initial"
-        animate="animate"
-        exit="exit"
+      role="status"
+      className={clsx(
+        "fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] min-w-[300px] max-w-[90vw] px-4 py-3 rounded-[12px] border backdrop-blur-xl bg-white/[0.05] shadow-2xl flex items-center gap-3",
+        colors[kind]
+      )}
+      variants={ANIMATIONS.variants.snackbar}
+      initial="initial"
+      animate="animate"
+      exit="exit"
     >
       <Icon size={18} className={kind === 'success' ? 'text-green-500' : kind === 'warn' ? 'text-amber-500' : 'text-red-500'} />
       <span className="text-sm font-medium">{text}</span>
-    </div>
+    </motion.div>
   );
 };
 
 // --- BOTTOM SHEET (Gesture) ---
-interface GestureBottomSheetProps { 
-    open: boolean; 
-    onClose: () => void; 
-    children?: React.ReactNode; 
-    title?: React.ReactNode;
+interface GestureBottomSheetProps {
+  open: boolean;
+  onClose: () => void;
+  children?: React.ReactNode;
+  title?: React.ReactNode;
 }
 
 export const GestureBottomSheet: React.FC<GestureBottomSheetProps> = ({
-    open,
-    onClose,
-    children,
-    title
+  open,
+  onClose,
+  children,
+  title
 }) => {
   const [dy, setDy] = useState(0);
-  const startY = useRef<number|null>(null);
+  const startY = useRef<number | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -273,23 +273,23 @@ export const GestureBottomSheet: React.FC<GestureBottomSheetProps> = ({
             className="relative w-full backdrop-blur-xl bg-white/[0.05] border-t border-white/10 rounded-t-[24px] shadow-2xl pb-safe"
             onTouchStart={e => { startY.current = e.touches[0].clientY; }}
             onTouchMove={e => {
-                if (startY.current === null) return;
-                const delta = e.touches[0].clientY - startY.current;
-                if (delta > 0) setDy(delta);
+              if (startY.current === null) return;
+              const delta = e.touches[0].clientY - startY.current;
+              if (delta > 0) setDy(delta);
             }}
             onTouchEnd={() => {
-                if (dy > 100) onClose();
-                setDy(0);
-                startY.current = null;
+              if (dy > 100) onClose();
+              setDy(0);
+              startY.current = null;
             }}
           >
-        {/* Handle */}
-        <div className="w-full flex justify-center pt-3 pb-1 cursor-grab active:cursor-grabbing" aria-hidden="true">
-            <div className="w-12 h-1.5 bg-white/20 rounded-full" />
-        </div>
+            {/* Handle */}
+            <div className="w-full flex justify-center pt-3 pb-1 cursor-grab active:cursor-grabbing" aria-hidden="true">
+              <div className="w-12 h-1.5 bg-white/20 rounded-full" />
+            </div>
 
-        {title && (
-            <div className="px-6 py-2 border-b border-white/5 flex items-center justify-between">
+            {title && (
+              <div className="px-6 py-2 border-b border-white/5 flex items-center justify-between">
                 <div id="sheet-title" className="text-lg font-serif text-white/90">{title}</div>
                 <button
                   ref={closeButtonRef}
@@ -297,16 +297,16 @@ export const GestureBottomSheet: React.FC<GestureBottomSheetProps> = ({
                   className="p-2 bg-white/5 rounded-full hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#161719] transition-all"
                   aria-label="Close dialog"
                 >
-                  <X size={16} className="text-white/60"/>
+                  <X size={16} className="text-white/60" />
                 </button>
+              </div>
+            )}
+
+            <div className="p-6 max-h-[75vh] overflow-y-auto scrollbar-hide">
+              {children}
             </div>
-        )}
-        
-        <div className="p-6 max-h-[75vh] overflow-y-auto scrollbar-hide">
-            {children}
+          </motion.div>
         </div>
-      </motion.div>
-    </div>
       )}
     </AnimatePresence>
   );

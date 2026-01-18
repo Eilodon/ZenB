@@ -11,7 +11,7 @@ import { ProgressArc } from './ProgressArc';
 import { useKernel } from '../kernel/KernelProvider';
 import { useCameraVitals } from '../hooks/useCameraVitals';
 import { AIConnectionStatus } from '../services/RustKernelBridge';
-import { LiveResultCard } from './design-system/Primitives';
+import { LiveResultCard } from '../design-system';
 
 export function ActiveSessionDisplay() {
     const isActive = useSessionStore(s => s.isActive);

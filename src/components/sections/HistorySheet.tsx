@@ -8,7 +8,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { useUIStore } from '../../stores/uiStore';
 import { TRANSLATIONS } from '../../translations';
 import { hapticTick } from '../../services/haptics';
-import { GestureBottomSheet } from '../design-system/Primitives';
+import { GestureBottomSheet } from '../../design-system';
 import { useKernelState } from '../../kernel/KernelProvider';
 import { BREATHING_PATTERNS } from '../../types';
 
@@ -126,12 +126,12 @@ export function HistorySheet() {
                                 <AreaChart data={chartData}>
                                     <defs>
                                         <linearGradient id="arousalGradient" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
-                                            <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
+                                            <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
+                                            <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
                                         </linearGradient>
                                         <linearGradient id="valenceGradient" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#16A34A" stopOpacity={0.3}/>
-                                            <stop offset="95%" stopColor="#16A34A" stopOpacity={0}/>
+                                            <stop offset="5%" stopColor="#16A34A" stopOpacity={0.3} />
+                                            <stop offset="95%" stopColor="#16A34A" stopOpacity={0} />
                                         </linearGradient>
                                     </defs>
                                     <XAxis

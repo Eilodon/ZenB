@@ -8,7 +8,7 @@ import { TRANSLATIONS } from '../../translations';
 import { SoundPack, BreathingType } from '../../types';
 import { hapticTick } from '../../services/haptics';
 import { CameraPermissionModal } from '../modals/CameraPermissionModal';
-import { GestureBottomSheet } from '../design-system/Primitives';
+import { GestureBottomSheet } from '../../design-system';
 import { HolodeckOverlay } from '../HolodeckOverlay';
 
 // Access window.aistudio via helper

@@ -19,7 +19,7 @@ import { KernelMonitor } from './components/KernelMonitor';
 import { BREATHING_PATTERNS } from './types';
 import { useKernel, useKernelState } from './kernel/KernelProvider';
 import { GeminiSomaticBridge } from './services/GeminiSomaticBridge';
-import { KineticSnackbar } from './components/design-system/Primitives';
+import { KineticSnackbar } from './design-system';
 import { ConfirmationModal } from './components/modals/ConfirmationModal';
 
 export default function App() {
