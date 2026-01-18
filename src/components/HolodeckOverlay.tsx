@@ -74,6 +74,66 @@ export function HolodeckOverlay({ onClose }: { onClose: () => void }) {
                             <div className="text-[9px] text-white/40">AI Co-Regulation</div>
                         </div>
                     </button>
+
+                    <button
+                        disabled={isRunning}
+                        onClick={() => run('pause_resume_long')}
+                        className="w-full text-left p-3 rounded bg-white/5 hover:bg-white/10 disabled:opacity-50 border border-white/5 flex items-center gap-2 group"
+                    >
+                        <div className="w-2 h-2 rounded-full bg-yellow-500 group-hover:shadow-[0_0_8px_rgba(234,179,8,0.5)]" />
+                        <div>
+                            <div className="text-white/90 font-bold">PAUSE</div>
+                            <div className="text-[9px] text-white/40">Long Resume</div>
+                        </div>
+                    </button>
+
+                    <button
+                        disabled={isRunning}
+                        onClick={() => run('safety_lock_ux')}
+                        className="w-full text-left p-3 rounded bg-white/5 hover:bg-white/10 disabled:opacity-50 border border-white/5 flex items-center gap-2 group"
+                    >
+                        <div className="w-2 h-2 rounded-full bg-rose-500 group-hover:shadow-[0_0_8px_rgba(244,63,94,0.5)]" />
+                        <div>
+                            <div className="text-white/90 font-bold">SAFETY</div>
+                            <div className="text-[9px] text-white/40">Lock → UX</div>
+                        </div>
+                    </button>
+
+                    <button
+                        disabled={isRunning}
+                        onClick={() => run('ai_confirm_timeout')}
+                        className="w-full text-left p-3 rounded bg-white/5 hover:bg-white/10 disabled:opacity-50 border border-white/5 flex items-center gap-2 group"
+                    >
+                        <div className="w-2 h-2 rounded-full bg-fuchsia-500 group-hover:shadow-[0_0_8px_rgba(217,70,239,0.5)]" />
+                        <div>
+                            <div className="text-white/90 font-bold">CONFIRM</div>
+                            <div className="text-[9px] text-white/40">AI Timeout</div>
+                        </div>
+                    </button>
+
+                    <button
+                        disabled={isRunning}
+                        onClick={() => run('wake_lock_visibility')}
+                        className="w-full text-left p-3 rounded bg-white/5 hover:bg-white/10 disabled:opacity-50 border border-white/5 flex items-center gap-2 group"
+                    >
+                        <div className="w-2 h-2 rounded-full bg-sky-500 group-hover:shadow-[0_0_8px_rgba(14,165,233,0.5)]" />
+                        <div>
+                            <div className="text-white/90 font-bold">WAKE</div>
+                            <div className="text-[9px] text-white/40">Visibility</div>
+                        </div>
+                    </button>
+
+                    <button
+                        disabled={isRunning}
+                        onClick={() => run('pwa_offline')}
+                        className="w-full text-left p-3 rounded bg-white/5 hover:bg-white/10 disabled:opacity-50 border border-white/5 flex items-center gap-2 group"
+                    >
+                        <div className="w-2 h-2 rounded-full bg-slate-400 group-hover:shadow-[0_0_8px_rgba(148,163,184,0.5)]" />
+                        <div>
+                            <div className="text-white/90 font-bold">OFFLINE</div>
+                            <div className="text-[9px] text-white/40">PWA Network</div>
+                        </div>
+                    </button>
                 </div>
 
                 {/* Main Log Output */}

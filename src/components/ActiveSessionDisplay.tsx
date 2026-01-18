@@ -1,7 +1,7 @@
 
 import { useRef, useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
-import { Activity, Gauge, AlertCircle, Fingerprint } from 'lucide-react';
+import { Activity, Gauge, AlertCircle, Fingerprint, Sparkles } from 'lucide-react';
 import { useSessionStore } from '../stores/sessionStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useAnimationCoordinator } from '../hooks/useAnimationCoordinator';
@@ -11,6 +11,7 @@ import { ProgressArc } from './ProgressArc';
 import { useKernel } from '../kernel/KernelProvider';
 import { AIConnectionStatus } from '../services/RustKernelBridge';
 import { LiveResultCard } from '../design-system';
+import { CoachingService, CoachingMessage } from '../services/coachingService';
 
 export function ActiveSessionDisplay() {
     const isActive = useSessionStore(s => s.isActive);
@@ -33,11 +34,29 @@ export function ActiveSessionDisplay() {
     const [tempoScale, setTempoScale] = useState(1.0);
     const [aiStatus, setAiStatus] = useState<AIConnectionStatus>('disconnected');
     const [lastAiMessage, setLastAiMessage] = useState<string | null>(null);
+    const [coachingMessage, setCoachingMessage] = useState<CoachingMessage | null>(null);
+    const [sessionStartTime, setSessionStartTime] = useState(0);
+
+    const coachingServiceRef = useRef<CoachingService | null>(null);
 
     const phaseLabel = useMemo(() => {
         if (phase === 'holdIn' || phase === 'holdOut') return t.phases.hold;
         return t.phases[phase];
     }, [phase, t]);
+
+    // Initialize coaching service
+    useEffect(() => {
+        if (isActive && !coachingServiceRef.current) {
+            coachingServiceRef.current = new CoachingService();
+            setSessionStartTime(Date.now());
+        }
+        if (!isActive && coachingServiceRef.current) {
+            coachingServiceRef.current.reset();
+            coachingServiceRef.current = null;
+            setCoachingMessage(null);
+            setSessionStartTime(0);
+        }
+    }, [isActive]);
 
     useEffect(() => {
         const unsub = kernel.subscribe(state => {
@@ -56,6 +75,32 @@ export function ActiveSessionDisplay() {
         });
         return unsub;
     }, [kernel]);
+
+    // Coaching message polling
+    useEffect(() => {
+        if (!isActive || isPaused || !coachingServiceRef.current) return;
+        if (!userSettings.coachingEnabled) return;
+
+        const interval = setInterval(() => {
+            const durationSec = Math.floor((Date.now() - sessionStartTime) / 1000);
+            const message = coachingServiceRef.current?.getCoachingMessage({
+                cycleCount,
+                durationSec,
+                phase,
+                alignment: vitals.alignment,
+                heartRate: vitals.heartRate,
+                tempoScale,
+            });
+
+            if (message) {
+                setCoachingMessage(message);
+                // Auto-dismiss after 5 seconds
+                setTimeout(() => setCoachingMessage(null), 5000);
+            }
+        }, 2000); // Check every 2 seconds
+
+        return () => clearInterval(interval);
+    }, [isActive, isPaused, cycleCount, phase, vitals, tempoScale, sessionStartTime, userSettings.coachingEnabled]);
 
     useEffect(() => {
         if (!isActive) {
@@ -129,6 +174,22 @@ export function ActiveSessionDisplay() {
                             generating={aiStatus === 'thinking' || aiStatus === 'speaking'}
                             mode="cloud" // Gemini is cloud-based
                         />
+                    </div>
+                </div>
+            )}
+
+            {/* COACHING MESSAGES */}
+            {coachingMessage && !isPaused && (
+                <div className="absolute top-[45%] w-full flex justify-center px-6 pointer-events-none">
+                    <div className="animate-in fade-in slide-in-from-bottom-3 duration-500 w-full max-w-md">
+                        <div className="px-6 py-4 rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.08] to-white/[0.02] backdrop-blur-xl shadow-2xl">
+                            <div className="flex items-center gap-3">
+                                <Sparkles size={18} className="text-blue-300 flex-shrink-0 animate-pulse" />
+                                <div className="text-sm font-medium text-white/90 tracking-wide leading-relaxed">
+                                    {coachingMessage.message}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

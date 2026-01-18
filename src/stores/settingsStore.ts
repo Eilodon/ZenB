@@ -34,6 +34,7 @@ type SettingsState = {
   toggleKernelMonitor: () => void;
   resetSafetyLock: (patternId: BreathingType) => void;
   toggleAiCoach: () => void; // v6.0
+  toggleCoaching: () => void; // v6.1 In-session coaching
 
   // Logic
   registerSessionComplete: (durationSec: number, patternId: BreathingType, cycles: number, finalBelief: BeliefState) => void;
@@ -69,7 +70,8 @@ export const useSettingsStore = create<SettingsState>()(
         safetyRegistry: {},
         cameraVitalsEnabled: false,
         showKernelMonitor: false,
-        aiCoachEnabled: false // v6.0 Default
+        aiCoachEnabled: false, // v6.0 Default
+        coachingEnabled: true  // In-session coaching messages enabled by default
       },
       history: [],
       hasSeenOnboarding: false,
@@ -89,6 +91,7 @@ export const useSettingsStore = create<SettingsState>()(
       toggleCameraVitals: () => set((s) => ({ userSettings: { ...s.userSettings, cameraVitalsEnabled: !s.userSettings.cameraVitalsEnabled } })),
       toggleKernelMonitor: () => set((s) => ({ userSettings: { ...s.userSettings, showKernelMonitor: !s.userSettings.showKernelMonitor } })),
       toggleAiCoach: () => set((s) => ({ userSettings: { ...s.userSettings, aiCoachEnabled: !s.userSettings.aiCoachEnabled } })),
+      toggleCoaching: () => set((s) => ({ userSettings: { ...s.userSettings, coachingEnabled: !s.userSettings.coachingEnabled } })),
 
       resetSafetyLock: (patternId) => set((state) => {
         const registry = { ...state.userSettings.safetyRegistry };

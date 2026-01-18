@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { Volume2, VolumeX, Smartphone, SmartphoneNfc, Music, Check, Terminal, ShieldAlert, Sparkles, Key, ExternalLink, TestTube2 } from 'lucide-react';
+import { Volume2, VolumeX, Smartphone, SmartphoneNfc, Music, Check, Terminal, ShieldAlert, Sparkles, Key, ExternalLink, TestTube2, Watch, WifiOff, Wifi, RefreshCw, Heart } from 'lucide-react';
 import clsx from 'clsx';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -10,6 +10,7 @@ import { hapticTick } from '../../services/haptics';
 import { CameraPermissionModal } from '../modals/CameraPermissionModal';
 import { GestureBottomSheet } from '../../design-system';
 import { HolodeckOverlay } from '../HolodeckOverlay';
+import { useWearable, WEARABLE_PROVIDERS, WearableProvider } from '../../services/WearableService';
 
 // Access window.aistudio via helper
 const getAIStudio = () => (window as any).aistudio as {
@@ -187,6 +188,8 @@ export function SettingsSheet() {
             </div>
           </section>
 
+          <WearableSection triggerHaptic={triggerHaptic} />
+
           <section>
             <div className="text-white/30 font-caps text-[9px] tracking-[0.2em] mb-4 flex items-center gap-2 pl-1">Advanced Intelligence</div>
             <div className="space-y-3">
@@ -217,5 +220,162 @@ export function SettingsSheet() {
         </div>
       </GestureBottomSheet>
     </>
+  );
+}
+
+// =============================================================================
+// WEARABLE SECTION COMPONENT
+// =============================================================================
+
+function WearableSection({ triggerHaptic }: { triggerHaptic: () => void }) {
+  const {
+    provider,
+    setProvider,
+    connectionState,
+    isConnected,
+    isLoading,
+    error,
+    heartRate,
+    connect,
+    disconnect,
+    availableProviders
+  } = useWearable();
+
+  const [expanded, setExpanded] = useState(false);
+
+  const handleProviderSelect = async (p: WearableProvider) => {
+    triggerHaptic();
+    await setProvider(p);
+    setExpanded(false);
+    if (p !== 'none') {
+      await connect();
+    }
+  };
+
+  const handleConnect = async () => {
+    triggerHaptic();
+    if (isConnected) {
+      disconnect();
+    } else {
+      await connect();
+    }
+  };
+
+  const currentProvider = WEARABLE_PROVIDERS[provider];
+
+  return (
+    <section>
+      <div className="text-white/30 font-caps text-[9px] tracking-[0.2em] mb-4 flex items-center gap-2 pl-1">
+        <Watch size={10} /> Wearable Devices
+      </div>
+      <div className="space-y-3">
+        {/* Current Device Status */}
+        <div className={clsx(
+          "p-5 rounded-[1.5rem] border transition-all",
+          isConnected
+            ? "bg-gradient-to-r from-green-500/10 to-emerald-500/10 border-green-500/20"
+            : "bg-white/[0.02] border-white/5"
+        )}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="text-2xl">{currentProvider.icon}</div>
+              <div>
+                <div className="text-sm font-medium text-white">{currentProvider.name}</div>
+                <div className="text-[10px] text-white/40 mt-0.5 flex items-center gap-2">
+                  {connectionState === 'CONNECTED' && (
+                    <><Wifi size={10} className="text-green-400" /> Connected</>
+                  )}
+                  {connectionState === 'CONNECTING' && (
+                    <><RefreshCw size={10} className="text-yellow-400 animate-spin" /> Connecting...</>
+                  )}
+                  {connectionState === 'RECONNECTING' && (
+                    <><RefreshCw size={10} className="text-yellow-400 animate-spin" /> Reconnecting...</>
+                  )}
+                  {connectionState === 'DISCONNECTED' && provider !== 'none' && (
+                    <><WifiOff size={10} className="text-white/30" /> Not connected</>
+                  )}
+                  {connectionState === 'ERROR' && (
+                    <><WifiOff size={10} className="text-red-400" /> Error</>
+                  )}
+                  {provider === 'none' && (
+                    <>Using camera-based detection</>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Heart Rate Badge */}
+            {isConnected && heartRate && (
+              <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-full">
+                <Heart size={12} className="text-red-400 animate-pulse" />
+                <span className="text-sm font-mono text-white">{Math.round(heartRate)}</span>
+                <span className="text-xs text-white/50">bpm</span>
+              </div>
+            )}
+          </div>
+
+          {error && (
+            <div className="mt-3 text-xs text-red-400 bg-red-500/10 p-2 rounded-lg">{error}</div>
+          )}
+
+          {/* Connect/Disconnect Button */}
+          {provider !== 'none' && (
+            <button
+              onClick={handleConnect}
+              disabled={isLoading}
+              className={clsx(
+                "mt-4 w-full py-3 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-2",
+                isConnected
+                  ? "bg-white/10 text-white/70 hover:bg-red-500/20 hover:text-red-300"
+                  : "bg-white/10 text-white hover:bg-white/20",
+                isLoading && "opacity-50"
+              )}
+            >
+              {isLoading ? (
+                <><RefreshCw size={14} className="animate-spin" /> Connecting...</>
+              ) : isConnected ? (
+                <><WifiOff size={14} /> Disconnect</>
+              ) : (
+                <><Wifi size={14} /> Connect</>
+              )}
+            </button>
+          )}
+        </div>
+
+        {/* Change Device Button */}
+        <button
+          onClick={() => { triggerHaptic(); setExpanded(!expanded); }}
+          className="w-full p-4 bg-white/5 rounded-xl flex items-center justify-between text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+        >
+          <span className="text-xs font-medium">Change Device</span>
+          <Watch size={16} />
+        </button>
+
+        {/* Provider List */}
+        {expanded && (
+          <div className="bg-white/[0.02] rounded-[1.5rem] border border-white/5 p-3 space-y-1">
+            {availableProviders.map(p => (
+              <button
+                key={p.id}
+                onClick={() => handleProviderSelect(p.id)}
+                className={clsx(
+                  "w-full text-left px-4 py-3.5 rounded-xl transition-all flex items-center gap-3 group",
+                  provider === p.id
+                    ? "bg-white/10 text-white"
+                    : "text-white/40 hover:bg-white/5 hover:text-white"
+                )}
+              >
+                <span className="text-xl">{p.icon}</span>
+                <div className="flex-1">
+                  <div className="text-sm font-medium">{p.name}</div>
+                  <div className="text-[10px] text-white/30">{p.description}</div>
+                </div>
+                {provider === p.id && <Check size={16} className="text-green-400" />}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }

@@ -2,9 +2,9 @@
 export type BreathPhase = 'inhale' | 'holdIn' | 'exhale' | 'holdOut';
 export type CueType = 'inhale' | 'exhale' | 'hold' | 'finish';
 
-export type BreathingType = 
-  | '4-7-8' 
-  | 'box' 
+export type BreathingType =
+  | '4-7-8'
+  | 'box'
   | 'calm'
   | 'coherence'
   | 'deep-relax'
@@ -15,7 +15,7 @@ export type BreathingType =
   | 'buteyko'
   | 'wim-hof';
 
-export type PatternTier = 1 | 2 | 3; 
+export type PatternTier = 1 | 2 | 3;
 
 export type ColorTheme = 'warm' | 'cool' | 'neutral';
 export type Language = 'en' | 'vi';
@@ -27,23 +27,23 @@ export type QualityTier = 'auto' | 'low' | 'medium' | 'high';
 export type SignalQuality = 'excellent' | 'good' | 'fair' | 'poor';
 
 export interface HRVMetrics {
-  rmssd: number;       
-  sdnn: number;        
-  stressIndex: number; 
+  rmssd: number;
+  sdnn: number;
+  stressIndex: number;
 }
 
 export interface AffectiveState {
-  valence: number;     
-  arousal: number;     
-  dominance?: number;  
+  valence: number;
+  arousal: number;
+  dominance?: number;
   mood_label: 'anxious' | 'calm' | 'focused' | 'neutral' | 'distracted';
 }
 
 export interface VitalSigns {
   heartRate: number;
-  respirationRate?: number; 
-  hrv?: HRVMetrics;         
-  affective?: AffectiveState; 
+  respirationRate?: number;
+  hrv?: HRVMetrics;
+  affective?: AffectiveState;
   confidence: number;
   signalQuality: SignalQuality;
   snr: number;
@@ -57,15 +57,15 @@ export type BeliefState = {
   attention: number;        // 0.0 (Dissociated) -> 1.0 (Hyper-focused)
   rhythm_alignment: number; // 0.0 (Arrhythmia) -> 1.0 (Resonance)
   valence: number;          // -1.0 to 1.0
-  
+
   arousal_variance: number;
   attention_variance: number;
   rhythm_variance: number;
-  
-  prediction_error: number; 
-  innovation: number;       
-  mahalanobis_distance: number; 
-  confidence: number;       
+
+  prediction_error: number;
+  innovation: number;
+  mahalanobis_distance: number;
+  confidence: number;
 };
 
 export type Observation = {
@@ -75,18 +75,18 @@ export type Observation = {
   visibilty_state: 'visible' | 'hidden';
   heart_rate?: number;
   hr_confidence?: number;
-  respiration_rate?: number; 
-  stress_index?: number;     
-  facial_valence?: number;   
+  respiration_rate?: number;
+  stress_index?: number;
+  facial_valence?: number;
 };
 
 // --- PRIMITIVE 1: TIME-TRAVELING DEBUGGER (Event Log) ---
 
-export type KernelEvent = 
+export type KernelEvent =
   | { type: 'BOOT'; timestamp: number }
   | { type: 'LOAD_PROTOCOL'; patternId: BreathingType; timestamp: number }
   | { type: 'START_SESSION'; timestamp: number }
-  | { type: 'TICK'; dt: number; observation: Observation; timestamp: number } 
+  | { type: 'TICK'; dt: number; observation: Observation; timestamp: number }
   | { type: 'BELIEF_UPDATE'; belief: BeliefState; timestamp: number }
   | { type: 'PHASE_TRANSITION'; from: BreathPhase; to: BreathPhase; timestamp: number }
   | { type: 'CYCLE_COMPLETE'; count: number; timestamp: number }
@@ -105,11 +105,11 @@ export type KernelEvent =
 
 export type SafetyProfile = {
   patternId: BreathingType;
-  cummulative_stress_score: number; 
+  cummulative_stress_score: number;
   last_incident_timestamp: number;
-  safety_lock_until: number; 
-  resonance_history: number[]; 
-  resonance_score: number; 
+  safety_lock_until: number;
+  resonance_history: number[];
+  resonance_score: number;
 };
 
 // --- SIMULATION TYPES (HOLODECK) ---
@@ -126,7 +126,7 @@ export type UserSettings = {
   quality: QualityTier;
   reduceMotion: boolean;
   showTimer: boolean;
-  language: Language; 
+  language: Language;
   soundPack: SoundPack;
   streak: number;
   lastBreathDate: string;
@@ -135,7 +135,8 @@ export type UserSettings = {
   cameraVitalsEnabled: boolean;
   showKernelMonitor: boolean;
   aiCoachEnabled: boolean;
-  apiKey?: string; 
+  coachingEnabled: boolean; // In-session coaching messages
+  apiKey?: string;
   developerMode?: boolean;
 };
 

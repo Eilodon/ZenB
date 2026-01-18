@@ -119,6 +119,19 @@ export class GeminiSomaticBridge {
       return;
     }
 
+    // Offline Guard (PWA Offline / Airplane mode)
+    if (typeof navigator !== 'undefined' && 'onLine' in navigator && navigator.onLine === false) {
+      console.warn('[ZenB Bridge] Offline. AI Coach unavailable.');
+      this.kernel.dispatch({ type: 'AI_STATUS_CHANGE', status: 'disconnected', timestamp: Date.now() });
+      try {
+        const { useUIStore } = await import('../stores/uiStore');
+        useUIStore.getState().showSnackbar('Offline: AI Coach unavailable.', 'warn');
+      } catch {
+        // UI store not available (non-UI context)
+      }
+      return;
+    }
+
     this.kernel.dispatch({ type: 'AI_STATUS_CHANGE', status: 'connecting', timestamp: Date.now() });
 
     try {

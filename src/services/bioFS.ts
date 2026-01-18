@@ -48,7 +48,8 @@ class BioFileSystem {
       });
     } else {
       this.health.supported = false;
-      this.dbPromise = Promise.reject('IndexedDB not supported');
+      // Avoid creating an unhandled rejected promise in non-IDB environments (tests/SSR).
+      this.dbPromise = Promise.resolve(null as any);
     }
   }
 

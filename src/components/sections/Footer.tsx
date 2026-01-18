@@ -12,6 +12,7 @@ import { unlockAudio, cleanupAudio } from '../../services/audio';
 import { hapticTick } from '../../services/haptics';
 import { useKernel, useKernelState } from '../../kernel/KernelProvider';
 import { ANIMATIONS } from '../../design-system'; // [ENHANCED] Design System V2
+import { recommendPatterns } from '../../services/patternRecommender';
 
 type FooterProps = {
   selectedPatternId: BreathingType;
@@ -57,7 +58,6 @@ export function Footer({ selectedPatternId, setSelectedPatternId }: FooterProps)
 
   const kernel = useKernel();
   const safetyRegistry = useKernelState(s => s.safetyRegistry);
-  const sessionStartTime = useSessionStore(s => s.sessionStartTime);
   const cycleCount = useSessionStore(s => s.cycleCount);
   const currentPattern = useSessionStore(s => s.currentPattern);
 
@@ -123,8 +123,8 @@ export function Footer({ selectedPatternId, setSelectedPatternId }: FooterProps)
   const handleStop = () => {
     triggerHaptic('medium');
     cleanupAudio();
-    const durationSec = Math.floor((Date.now() - sessionStartTime) / 1000);
     const kernelState = kernel.getState();
+    const durationSec = Math.floor(kernelState.sessionDuration);
 
     // Explicitly manually trigger the HALT logic in Kernel first to ensure analytics run
     kernel.dispatch({ type: 'HALT', reason: 'user_stop', timestamp: Date.now() });
@@ -193,16 +193,28 @@ export function Footer({ selectedPatternId, setSelectedPatternId }: FooterProps)
     return Wind;
   };
 
-  // Sort patterns: High resonance first, then standard order
+  // Get pattern recommendations
+  const recommendations = React.useMemo(() => recommendPatterns(3), [history]);
+  const getRecommendation = (patternId: string) => recommendations.find(r => r.patternId === patternId);
+
+  // Sort patterns: Recommended first, then high resonance, then standard order
   const sortedPatterns = React.useMemo(() => {
     return Object.values(BREATHING_PATTERNS).sort((a, b) => {
+      // Recommended patterns get highest priority
+      const recA = getRecommendation(a.id);
+      const recB = getRecommendation(b.id);
+      if (recA && !recB) return -1;
+      if (!recA && recB) return 1;
+      if (recA && recB) return recB.score - recA.score;
+
+      // Then sort by resonance
       const scoreA = getResonanceScore(a.id);
       const scoreB = getResonanceScore(b.id);
       // Only prioritize if significantly better (>10% diff)
       if (Math.abs(scoreA - scoreB) > 0.1) return scoreB - scoreA;
       return 0; // maintain original order otherwise
     });
-  }, [safetyRegistry]);
+  }, [safetyRegistry, recommendations]);
 
   return (
     <footer className="fixed bottom-0 inset-x-0 z-30 pb-[calc(1.5rem+env(safe-area-inset-bottom))] transition-all duration-700 ease-out pointer-events-none">
@@ -283,9 +295,19 @@ export function Footer({ selectedPatternId, setSelectedPatternId }: FooterProps)
                         <div className={clsx("text-xl font-serif leading-tight mb-1 transition-colors duration-300", styles.text)}>
                           {t.patterns[p.id as BreathingType]?.label || p.label}
                         </div>
-                        <div className="text-[10px] text-white/40 uppercase tracking-widest font-medium truncate">
-                          {t.patterns[p.id as BreathingType]?.tag || p.tag}
-                        </div>
+                        {(() => {
+                          const rec = getRecommendation(p.id);
+                          return rec ? (
+                            <div className="text-[9px] text-cyan-300 uppercase tracking-widest font-medium truncate flex items-center gap-1">
+                              <span className="inline-block w-1 h-1 rounded-full bg-cyan-400 animate-pulse" />
+                              {rec.reason}
+                            </div>
+                          ) : (
+                            <div className="text-[10px] text-white/40 uppercase tracking-widest font-medium truncate">
+                              {t.patterns[p.id as BreathingType]?.tag || p.tag}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* Bottom Section */}

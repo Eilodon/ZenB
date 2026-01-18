@@ -43,6 +43,8 @@ export const TRANSLATIONS = {
       beginJourney: 'Begin Journey',
       streak: 'Mindful Streak',
       dayStreak: 'Day Streak',
+      offline: 'Offline mode. Some features are disabled.',
+      online: 'Back online.',
     },
     history: {
       title: 'Journal',
@@ -182,6 +184,8 @@ export const TRANSLATIONS = {
       beginJourney: 'Bắt đầu hành trình',
       streak: 'Tinh tấn',
       dayStreak: 'Ngày liên tục',
+      offline: 'Đang offline. Một số tính năng sẽ bị tắt.',
+      online: 'Đã kết nối lại.',
     },
     history: {
       title: 'Hành trình',

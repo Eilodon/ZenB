@@ -23,6 +23,10 @@ import {
     BREATHING_PATTERNS
 } from '../types';
 
+// Advanced services
+import { SafetyMonitor } from './SafetyMonitor';
+import { UKFStateEstimator } from './UKFStateEstimator';
+
 // ============================================================================
 // FFI TYPE DEFINITIONS (matches rust-core/src/zenone.udl)
 // ============================================================================
@@ -188,7 +192,7 @@ class MockZenOneRuntime {
     private cyclesCompleted: number = 0;
     private tempoScale: number = 1.0;
     private safetyLocked: boolean = false;
-    private sessionStartTime: number = 0;
+    private sessionDurationSec: number = 0;
     private lastBelief: FfiBeliefState = {
         probabilities: [0.4, 0.1, 0.2, 0.2, 0.1],
         confidence: 0.5,
@@ -234,7 +238,7 @@ class MockZenOneRuntime {
         }
         this.sessionActive = true;
         this.status = 'Running';
-        this.sessionStartTime = Date.now();
+        this.sessionDurationSec = 0;
         this.cyclesCompleted = 0;
         this.phaseProgress = 0;
         this.phase = 'Inhale';
@@ -242,9 +246,11 @@ class MockZenOneRuntime {
 
     stop_session(): FfiSessionStats {
         this.sessionActive = false;
-        this.status = 'Idle';
+        if (!this.safetyLocked) {
+            this.status = 'Idle';
+        }
         return {
-            duration_sec: (Date.now() - this.sessionStartTime) / 1000,
+            duration_sec: this.sessionDurationSec,
             cycles_completed: this.cyclesCompleted,
             pattern_id: this.currentPatternId,
             avg_heart_rate: null,
@@ -275,6 +281,7 @@ class MockZenOneRuntime {
 
     tick(dt_sec: number, _timestamp_us: number): FfiFrame {
         if (this.status === 'Running') {
+            this.sessionDurationSec += dt_sec;
             const pattern = BREATHING_PATTERNS[this.currentPatternId as BreathingType];
             if (pattern) {
                 const phaseDuration = pattern.timings[ffiPhaseToBreathPhase(this.phase)];
@@ -322,7 +329,7 @@ class MockZenOneRuntime {
             phase: this.phase,
             phase_progress: this.phaseProgress,
             cycles_completed: this.cyclesCompleted,
-            session_duration_sec: this.sessionActive ? (Date.now() - this.sessionStartTime) / 1000 : 0,
+            session_duration_sec: this.sessionActive ? this.sessionDurationSec : 0,
             tempo_scale: this.tempoScale,
             belief: this.lastBelief,
             resonance: this.lastResonance,
@@ -389,6 +396,11 @@ export class RustKernelBridge {
     private eventLog: KernelEvent[] = [];
     private readonly MAX_LOG_SIZE = 1000;
 
+    // Advanced services
+    private safetyMonitor = new SafetyMonitor();
+    private ukf = new UKFStateEstimator();
+    private useUKF = true; // Use UKF for belief state estimation
+
     constructor() {
         // Note: Using MockZenOneRuntime for development
         // When targeting mobile, replace with actual UniFFI ZenOneRuntime bindings
@@ -405,6 +417,20 @@ export class RustKernelBridge {
 
     dispatch(event: KernelEvent): void {
         const beforeState = this.state;
+
+        // SAFETY CHECK: Verify event is safe before processing
+        const safetyCheck = this.safetyMonitor.checkEvent(event, this.state);
+        if (!safetyCheck.safe) {
+            if (safetyCheck.correctedEvent) {
+                // Use the shielded/corrected event instead
+                console.warn('[RustKernelBridge] Using shielded event:', safetyCheck.correctedEvent);
+                event = safetyCheck.correctedEvent;
+            } else {
+                // Cannot shield, must reject
+                console.error('[RustKernelBridge] Event rejected by SafetyMonitor:', event);
+                return;
+            }
+        }
 
         switch (event.type) {
             case 'BOOT':
@@ -482,17 +508,29 @@ export class RustKernelBridge {
 
         // Convert frame to state update
         const beforeState = this.state;
+        const sessionDuration = beforeState.status === 'RUNNING'
+            ? beforeState.sessionDuration + dt
+            : beforeState.sessionDuration;
+
+        // Use UKF for belief state estimation if enabled
+        let belief: BeliefState;
+        if (this.useUKF && this.state.status === 'RUNNING') {
+            // Update UKF with observation
+            belief = this.ukf.update(observation, dt);
+        } else {
+            // Fallback to FFI belief conversion
+            belief = ffiBeliefToBeliefState(frame.belief, frame.resonance);
+        }
+
         this.state = {
             ...this.state,
             phase: ffiPhaseToBreathPhase(frame.phase),
             phaseElapsed: frame.phase_progress * this.getPhaseDuration(ffiPhaseToBreathPhase(frame.phase)),
             cycleCount: frame.cycles_completed,
-            belief: ffiBeliefToBeliefState(frame.belief, frame.resonance),
+            belief,
             lastObservation: observation,
             lastUpdateTimestamp: Date.now(),
-            sessionDuration: this.state.sessionStartTime > 0
-                ? (Date.now() - this.state.sessionStartTime) / 1000
-                : 0
+            sessionDuration
         };
 
         // Run middlewares
@@ -580,7 +618,7 @@ export class RustKernelBridge {
             phaseStartTime: prev?.phaseStartTime || now,
             phaseDuration: pattern ? pattern.timings[ffiPhaseToBreathPhase(ffiState.phase)] : 0,
             cycleCount: ffiState.cycles_completed,
-            sessionStartTime: ffiState.status === 'Running' ? (prev?.sessionStartTime || now) : 0,
+            sessionStartTime: (ffiState.status === 'Running' || ffiState.status === 'Paused') ? (prev?.sessionStartTime || now) : 0,
             belief,
             safetyRegistry: this.safetyRegistry,
             phaseElapsed: ffiState.phase_progress * (pattern ? pattern.timings[ffiPhaseToBreathPhase(ffiState.phase)] : 1),

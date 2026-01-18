@@ -21,6 +21,8 @@ import { useKernel, useKernelState } from './kernel/KernelProvider';
 import { GeminiSomaticBridge } from './services/GeminiSomaticBridge';
 import { KineticSnackbar } from './design-system';
 import { ConfirmationModal } from './components/modals/ConfirmationModal';
+import { WakeLockManager } from './services/WakeLockManager';
+import { OnlineStatusManager } from './services/OnlineStatusManager';
 
 export default function App() {
   // --- SELECTORS ---
@@ -48,32 +50,57 @@ export default function App() {
   const aiStatus = useKernelState(s => s.aiStatus);
 
   const [selectedPatternId, setSelectedPatternId] = useState<BreathingType>(userSettings.lastUsedPattern || '4-7-8');
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator !== 'undefined' && 'onLine' in navigator ? navigator.onLine : true));
 
   useEffect(() => {
     setSelectedPatternId(userSettings.lastUsedPattern);
   }, [userSettings.lastUsedPattern]);
 
-  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  const wakeLockManagerRef = useRef<WakeLockManager | null>(null);
   const bridgeRef = useRef<GeminiSomaticBridge | null>(null);
   const t = TRANSLATIONS[userSettings.language] || TRANSLATIONS.en;
 
+  // --- ONLINE/OFFLINE STATUS ---
+  useEffect(() => {
+    const showSnackbar = useUIStore.getState().showSnackbar;
+    let didInit = false;
+
+    const mgr = new OnlineStatusManager({
+      onChange: (online) => {
+        setIsOnline(online);
+        if (!didInit) { didInit = true; return; }
+        showSnackbar(online ? t.ui.online : t.ui.offline, online ? 'success' : 'warn');
+      }
+    });
+
+    mgr.start();
+    return () => mgr.dispose();
+  }, [t.ui.offline, t.ui.online]);
+
   // --- GEMINI SOMATIC BRIDGE LIFECYCLE ---
   useEffect(() => {
-    if (userSettings.aiCoachEnabled && isActive && !bridgeRef.current) {
-      bridgeRef.current = new GeminiSomaticBridge(kernel);
+    const shouldConnect = userSettings.aiCoachEnabled && isActive && isOnline;
+
+    if (shouldConnect) {
+      if (!bridgeRef.current) bridgeRef.current = new GeminiSomaticBridge(kernel);
       bridgeRef.current.connect();
-    } else if ((!userSettings.aiCoachEnabled || !isActive) && bridgeRef.current) {
+      return;
+    }
+
+    if (bridgeRef.current) {
       bridgeRef.current.disconnect();
       bridgeRef.current = null;
     }
+  }, [userSettings.aiCoachEnabled, isActive, isOnline, kernel]);
 
+  useEffect(() => {
     return () => {
       if (bridgeRef.current) {
         bridgeRef.current.disconnect();
         bridgeRef.current = null;
       }
     };
-  }, [userSettings.aiCoachEnabled, isActive, kernel]);
+  }, []);
 
   useEffect(() => {
     if (lastSessionStats) {
@@ -130,46 +157,20 @@ export default function App() {
 
   // ROBUST WAKE LOCK
   useEffect(() => {
-    const requestWakeLock = async () => {
-      if (!isActive || isPaused) {
-        if (wakeLockRef.current) {
-          wakeLockRef.current.release().catch(() => { });
-          wakeLockRef.current = null;
-        }
-        return;
-      }
+    const mgr = new WakeLockManager({
+      onError: (err) => console.warn('Wake Lock failed:', err),
+    });
+    wakeLockManagerRef.current = mgr;
+    mgr.start();
 
-      if ('wakeLock' in navigator && !wakeLockRef.current) {
-        try {
-          const lock = await navigator.wakeLock.request('screen');
-          wakeLockRef.current = lock;
-          lock.addEventListener('release', () => {
-            wakeLockRef.current = null;
-          });
-        } catch (err) {
-          console.warn("Wake Lock failed:", err);
-        }
-      }
-    };
-
-    requestWakeLock();
-
-    const handleVis = () => {
-      if (document.visibilityState === 'visible') {
-        requestWakeLock();
-      } else {
-        if (wakeLockRef.current) {
-          wakeLockRef.current.release().catch(() => { });
-          wakeLockRef.current = null;
-        }
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVis);
     return () => {
-      document.removeEventListener('visibilitychange', handleVis);
-      if (wakeLockRef.current) wakeLockRef.current.release().catch(() => { });
+      wakeLockManagerRef.current = null;
+      void mgr.dispose();
     };
+  }, []);
+
+  useEffect(() => {
+    wakeLockManagerRef.current?.setSessionState({ isActive, isPaused });
   }, [isActive, isPaused]);
 
   return (

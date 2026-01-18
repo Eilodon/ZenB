@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useSessionStore } from '../stores/sessionStore';
 import { useSettingsStore } from '../stores/settingsStore';
+import { useUIStore } from '../stores/uiStore';
 import { RuntimeState } from '../services/RustKernelBridge';
 import { useCameraVitals } from './useCameraVitals';
 import { useKernel } from '../kernel/KernelProvider';
@@ -73,11 +74,16 @@ export function useBreathEngine(): EngineRefs {
 
     // --- KERNEL OBSERVER (Visuals & React State) ---
     useEffect(() => {
+        const showSnackbar = useUIStore.getState().showSnackbar;
+        let lastStatus: RuntimeState['status'] | null = null;
+
         const unsub = kernel.subscribe((state: RuntimeState) => {
             // Safety Monitor
-            if (state.status === 'SAFETY_LOCK') {
+            if (state.status === 'SAFETY_LOCK' && lastStatus !== 'SAFETY_LOCK') {
+                showSnackbar('Safety lock engaged. Session stopped.', 'error');
                 stopSession();
             }
+            lastStatus = state.status;
 
             // Visual Cortex Driver
             const duration = state.phaseDuration || 1;
