@@ -1,0 +1,27 @@
+[package]
+name = "zenone-ffi"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+name = "zenone"
+path = "lib.rs"
+
+[dependencies]
+# AGOLOS core crates (ZenB/rust-core/../../ = B.1/AGOLOS)
+zenb-core = { path = "../../AGOLOS/crates/zenb-core", features = ["vajra_void"] }
+zenb-signals = { path = "../../AGOLOS/crates/zenb-signals" }
+zenb-store = { path = "../../AGOLOS/crates/zenb-store" }
+
+# UniFFI for cross-platform bindings
+uniffi = { version = "0.28", features = ["cli"] }
+thiserror = "1.0"
+log = "0.4"
+parking_lot = "0.12"
+chrono = { version = "0.4", features = ["serde"] }
+serde_json = "1.0"
+
+[build-dependencies]
+uniffi = { version = "0.28", features = ["build"] }

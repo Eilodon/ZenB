@@ -1,0 +1,1 @@
+cargo:rustc-env=MIME_TYPES_GENERATED_PATH=/home/ybao/B.1/ZenB/rust-core/target/release/build/mime_guess-0d27f791f7731a3a/out/mime_types_generated.rs

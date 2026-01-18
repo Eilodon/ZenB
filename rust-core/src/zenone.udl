@@ -1,0 +1,144 @@
+namespace zenone {
+};
+
+[Error]
+enum ZenOneError {
+    "PatternNotFound",
+    "SessionNotActive",
+    "SafetyViolation",
+    "ConfigError",
+};
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum FfiPhase {
+    "Inhale",
+    "HoldIn",
+    "Exhale",
+    "HoldOut",
+};
+
+enum FfiBeliefMode {
+    "Calm",
+    "Stress",
+    "Focus",
+    "Sleepy",
+    "Energize",
+};
+
+enum FfiRuntimeStatus {
+    "Idle",
+    "Running",
+    "Paused",
+    "SafetyLock",
+};
+
+// ============================================================================
+// DATA TYPES
+// ============================================================================
+
+dictionary FfiBreathPattern {
+    string id;
+    string label;
+    string tag;
+    string description;
+    f32 inhale_sec;
+    f32 hold_in_sec;
+    f32 exhale_sec;
+    f32 hold_out_sec;
+    u32 recommended_cycles;
+    f32 arousal_impact;
+};
+
+dictionary FfiBeliefState {
+    sequence<f32> probabilities;
+    f32 confidence;
+    FfiBeliefMode mode;
+    f32 uncertainty;
+};
+
+dictionary FfiResonance {
+    f32 coherence_score;
+    f32 phase_locking;
+    f32 rhythm_alignment;
+};
+
+dictionary FfiSafetyStatus {
+    boolean is_locked;
+    u32 trauma_count;
+    sequence<f32> tempo_bounds;
+    sequence<f32> hr_bounds;
+};
+
+dictionary FfiFrame {
+    FfiPhase phase;
+    f32 phase_progress;
+    u64 cycles_completed;
+    f32? heart_rate;
+    f32 signal_quality;
+    FfiBeliefState belief;
+    FfiResonance resonance;
+};
+
+dictionary FfiSessionStats {
+    f32 duration_sec;
+    u64 cycles_completed;
+    string pattern_id;
+    f32? avg_heart_rate;
+    FfiBeliefState final_belief;
+    f32 avg_resonance;
+};
+
+dictionary FfiRuntimeState {
+    FfiRuntimeStatus status;
+    string pattern_id;
+    FfiPhase phase;
+    f32 phase_progress;
+    u64 cycles_completed;
+    f32 session_duration_sec;
+    f32 tempo_scale;
+    FfiBeliefState belief;
+    FfiResonance resonance;
+    FfiSafetyStatus safety;
+};
+
+// ============================================================================
+// RUNTIME INTERFACE
+// ============================================================================
+
+interface ZenOneRuntime {
+    constructor();
+    [Name=with_pattern]
+    constructor(string pattern_id);
+
+    // Pattern management
+    sequence<FfiBreathPattern> get_patterns();
+    boolean load_pattern(string pattern_id);
+    string current_pattern_id();
+
+    // Session management
+    [Throws=ZenOneError]
+    void start_session();
+    FfiSessionStats stop_session();
+    boolean is_session_active();
+    void pause_session();
+    void resume_session();
+
+    // Frame processing
+    FfiFrame process_frame(f32 r, f32 g, f32 b, i64 timestamp_us);
+    FfiFrame tick(f32 dt_sec, i64 timestamp_us);
+
+    // State queries
+    FfiRuntimeState get_state();
+    FfiBeliefState get_belief();
+    FfiSafetyStatus get_safety_status();
+
+    // Control actions
+    [Throws=ZenOneError]
+    f32 adjust_tempo(f32 scale, string reason);
+    void update_context(u8 local_hour, boolean is_charging, u16 recent_sessions);
+    void emergency_halt(string reason);
+    void reset_safety_lock();
+};
