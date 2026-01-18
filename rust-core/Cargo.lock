@@ -1857,6 +1857,7 @@ dependencies = [
  "chrono",
  "log",
  "parking_lot",
+ "serde",
  "serde_json",
  "thiserror",
  "uniffi",

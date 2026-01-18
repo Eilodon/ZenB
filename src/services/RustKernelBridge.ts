@@ -27,6 +27,9 @@ import {
 import { SafetyMonitor } from './SafetyMonitor';
 import { UKFStateEstimator } from './UKFStateEstimator';
 
+// Tauri integration
+import { initTauriInvoke, isTauriAvailable, getTauriRuntime, TauriZenOneRuntime } from './TauriRuntime';
+
 // ============================================================================
 // FFI TYPE DEFINITIONS (matches rust-core/src/zenone.udl)
 // ============================================================================
@@ -389,6 +392,8 @@ export type Middleware = (
 
 export class RustKernelBridge {
     private runtime: MockZenOneRuntime;
+    private tauriRuntime: TauriZenOneRuntime | null = null;
+    private useTauri: boolean = false;
     private state: RuntimeState;
     private subscribers = new Set<(state: RuntimeState) => void>();
     private middlewares: Middleware[] = [];
@@ -402,13 +407,37 @@ export class RustKernelBridge {
     private useUKF = true; // Use UKF for belief state estimation
 
     constructor() {
-        // Note: Using MockZenOneRuntime for development
-        // When targeting mobile, replace with actual UniFFI ZenOneRuntime bindings
+        // Initialize mock runtime (always available as fallback)
         this.runtime = new MockZenOneRuntime();
         this.state = this.buildState();
 
+        // Try to initialize Tauri runtime
+        this.initTauri();
+
         // Log boot event
         this.logEvent({ type: 'BOOT', timestamp: Date.now() });
+    }
+
+    /**
+     * Initialize Tauri runtime asynchronously
+     */
+    private async initTauri(): Promise<void> {
+        try {
+            const available = await initTauriInvoke();
+            if (available) {
+                this.tauriRuntime = getTauriRuntime();
+                this.useTauri = true;
+                console.log('[RustKernelBridge] Tauri runtime enabled - using native Rust kernel');
+                // Sync initial state from Rust
+                const rustState = await this.tauriRuntime.get_state();
+                this.state = this.buildStateFromRust(rustState);
+                this.notify();
+            } else {
+                console.log('[RustKernelBridge] Tauri not available - using mock runtime');
+            }
+        } catch (e) {
+            console.warn('[RustKernelBridge] Tauri init failed, using mock:', e);
+        }
     }
 
     // =========================================================================
@@ -628,6 +657,49 @@ export class RustKernelBridge {
             aiStatus,
             lastAiMessage,
             startBelief: ffiState.status === 'Running' && !prev?.startBelief ? belief : (prev?.startBelief || null)
+        };
+    }
+
+    /**
+     * Build RuntimeState from Rust FfiRuntimeState
+     * Used when Tauri runtime is active
+     */
+    private buildStateFromRust(ffiState: FfiRuntimeState): RuntimeState {
+        const pattern = BREATHING_PATTERNS[ffiState.pattern_id as BreathingType] || null;
+
+        const statusMap: Record<FfiRuntimeStatus, RuntimeStatus> = {
+            'Idle': 'IDLE',
+            'Running': 'RUNNING',
+            'Paused': 'PAUSED',
+            'SafetyLock': 'SAFETY_LOCK'
+        };
+
+        const now = Date.now();
+        const belief = ffiBeliefToBeliefState(ffiState.belief, ffiState.resonance);
+
+        return {
+            version: 7.0,
+            status: statusMap[ffiState.status],
+            bootTimestamp: this.state?.bootTimestamp || now,
+            lastUpdateTimestamp: now,
+            pattern,
+            tempoScale: ffiState.tempo_scale,
+            phase: ffiPhaseToBreathPhase(ffiState.phase),
+            phaseStartTime: this.state?.phaseStartTime || now,
+            phaseDuration: pattern ? pattern.timings[ffiPhaseToBreathPhase(ffiState.phase)] : 0,
+            cycleCount: ffiState.cycles_completed,
+            sessionStartTime: (ffiState.status === 'Running' || ffiState.status === 'Paused')
+                ? (this.state?.sessionStartTime || now)
+                : 0,
+            belief,
+            safetyRegistry: this.safetyRegistry,
+            phaseElapsed: ffiState.phase_progress * (pattern ? pattern.timings[ffiPhaseToBreathPhase(ffiState.phase)] : 1),
+            sessionDuration: ffiState.session_duration_sec,
+            lastObservation: this.state?.lastObservation || null,
+            aiActive: this.state?.aiActive || false,
+            aiStatus: this.state?.aiStatus || 'disconnected',
+            lastAiMessage: this.state?.lastAiMessage || null,
+            startBelief: ffiState.status === 'Running' && !this.state?.startBelief ? belief : (this.state?.startBelief || null)
         };
     }
 

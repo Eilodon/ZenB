@@ -6,6 +6,8 @@
 use std::sync::Mutex;
 use std::time::Instant;
 
+use serde::{Serialize, Deserialize};
+
 use zenb_core::{
     breath_patterns::{builtin_patterns, BreathPattern},
     phase_machine::{Phase, PhaseMachine},
@@ -40,7 +42,7 @@ pub enum ZenOneError {
 // ============================================================================
 
 /// Breathing pattern info (FFI-safe)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FfiBreathPattern {
     pub id: String,
     pub label: String,
@@ -72,7 +74,7 @@ impl From<&BreathPattern> for FfiBreathPattern {
 }
 
 /// Current phase (FFI-safe enum)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FfiPhase {
     Inhale,
     HoldIn,
@@ -92,7 +94,7 @@ impl From<Phase> for FfiPhase {
 }
 
 /// Belief basis mode (FFI-safe)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FfiBeliefMode {
     Calm,
     Stress,
@@ -115,7 +117,7 @@ impl From<u8> for FfiBeliefMode {
 }
 
 /// Runtime status (FFI-safe)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FfiRuntimeStatus {
     Idle,
     Running,
@@ -124,7 +126,7 @@ pub enum FfiRuntimeStatus {
 }
 
 /// Full belief state (FFI-safe)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FfiBeliefState {
     /// 5-mode probability distribution [Calm, Stress, Focus, Sleepy, Energize]
     pub probabilities: Vec<f32>,
@@ -170,7 +172,7 @@ fn get_engine_belief(engine: &Engine) -> FfiBeliefState {
 }
 
 /// Estimate from Engine (FFI-safe)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FfiEstimate {
     /// Arousal level 0-1
     pub arousal: f32,
@@ -185,7 +187,7 @@ pub struct FfiEstimate {
 }
 
 /// Safety status (FFI-safe)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FfiSafetyStatus {
     /// Whether safety lock is engaged
     pub is_locked: bool,
@@ -198,7 +200,7 @@ pub struct FfiSafetyStatus {
 }
 
 /// Resonance metrics (FFI-safe)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FfiResonance {
     /// Coherence score 0-1
     pub coherence_score: f32,
@@ -209,7 +211,7 @@ pub struct FfiResonance {
 }
 
 /// Frame result from process_frame
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FfiFrame {
     pub phase: FfiPhase,
     pub phase_progress: f32,
@@ -223,7 +225,7 @@ pub struct FfiFrame {
 }
 
 /// Session statistics
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FfiSessionStats {
     pub duration_sec: f32,
     pub cycles_completed: u64,
@@ -236,7 +238,7 @@ pub struct FfiSessionStats {
 }
 
 /// Full runtime state snapshot (FFI-safe)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FfiRuntimeState {
     pub status: FfiRuntimeStatus,
     pub pattern_id: String,
