@@ -2,13 +2,22 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Lock, Circle, X, Check, AlertTriangle, Info, ThumbsUp, ThumbsDown, Copy } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
+import { COLORS, DURATION, ANIMATIONS } from './index';
 
-// --- TOKENS & UTILS ---
+// --- LEGACY TOKENS (for backward compatibility) ---
 const TOKENS = {
   colors: {
-    dark: { surface: "#0B0B0C", elev: "#161719", text: "#EDEDED", primary: "#3B82F6", success: "#16A34A", warn: "#F59E0B", error: "#DC2626" }
+    dark: {
+      surface: COLORS.surface.base,
+      elev: COLORS.surface.elevated,
+      text: COLORS.text.primary,
+      primary: COLORS.semantic.info.DEFAULT,
+      success: COLORS.semantic.success.DEFAULT,
+      warn: COLORS.semantic.warning.DEFAULT,
+      error: COLORS.semantic.error.DEFAULT
+    }
   },
-  duration: { in: 150, out: 200 }
+  duration: { in: DURATION.fast, out: DURATION.base }
 };
 
 // --- SECURITY CUE ---
@@ -46,12 +55,12 @@ interface LiveResultCardProps {
   mode?: 'on-device' | 'hybrid' | 'cloud';
 }
 
-export const LiveResultCard: React.FC<LiveResultCardProps> = ({ 
-  title, 
-  content, 
-  generating = false, 
-  onDismiss, 
-  mode = 'cloud' 
+export const LiveResultCard: React.FC<LiveResultCardProps> = ({
+  title,
+  content,
+  generating = false,
+  onDismiss,
+  mode = 'cloud'
 }) => {
   const [stream, setStream] = useState("");
   const [isGen, setIsGen] = useState(generating);
@@ -64,10 +73,10 @@ export const LiveResultCard: React.FC<LiveResultCardProps> = ({
   useEffect(() => {
     if (!content) return;
     if (generating) {
-        setStream(""); 
+        setStream("");
         return;
     }
-    
+
     // Simple typewriter effect for new content
     let i = 0;
     setStream("");
@@ -76,17 +85,21 @@ export const LiveResultCard: React.FC<LiveResultCardProps> = ({
       i++;
       if (i >= content.length) clearInterval(id);
     }, 15);
-    
+
     return () => clearInterval(id);
   }, [content, generating]);
 
   const displayedText = generating ? "Processing..." : (stream || content);
 
   return (
-    <div 
-        className="relative w-full max-w-sm rounded-[16px] p-5 bg-[#161719] border border-white/10 shadow-card transition-all"
-        role="region" 
+    <motion.div
+        className="relative w-full max-w-sm rounded-[16px] p-5 backdrop-blur-xl bg-white/[0.05] border border-white/10 shadow-2xl transition-all"
+        role="region"
         aria-live="polite"
+        variants={ANIMATIONS.variants.scaleIn}
+        initial="initial"
+        animate="animate"
+        exit="exit"
     >
       <div className="absolute top-4 right-4 flex items-center gap-3">
         <SecurityCue mode={mode} />
@@ -138,40 +151,35 @@ interface KineticSnackbarProps {
     onClose: () => void; 
 }
 
-export const KineticSnackbar: React.FC<KineticSnackbarProps> = ({ 
-    kind = 'success', 
-    text, 
-    onClose 
+export const KineticSnackbar: React.FC<KineticSnackbarProps> = ({
+    kind = 'success',
+    text,
+    onClose
 }) => {
-  const [closing, setClosing] = useState(false);
-  
-  useEffect(() => {
-    const t1 = setTimeout(() => setClosing(true), 3500);
-    const t2 = setTimeout(onClose, 3700);
-    return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, [onClose]);
-
   const IconMap = {
       success: Check,
       warn: AlertTriangle,
       error: Info // or alert
   };
   const Icon = IconMap[kind];
-  
+
   const colors = {
-      success: 'border-green-500/50 text-green-100',
-      warn: 'border-amber-500/50 text-amber-100',
-      error: 'border-red-500/50 text-red-100'
+      success: `border-[${COLORS.semantic.success.DEFAULT}]/50 text-[${COLORS.semantic.success[100]}]`,
+      warn: `border-[${COLORS.semantic.warning.DEFAULT}]/50 text-[${COLORS.semantic.warning[100]}]`,
+      error: `border-[${COLORS.semantic.error.DEFAULT}]/50 text-[${COLORS.semantic.error[100]}]`
   };
 
   return (
-    <div 
-        role="status" 
+    <motion.div
+        role="status"
         className={clsx(
-            "fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] min-w-[300px] max-w-[90vw] px-4 py-3 rounded-[12px] border bg-[#161719]/90 backdrop-blur-md shadow-2xl flex items-center gap-3",
-            colors[kind],
-            closing ? "animate-snack-out" : "animate-snack-in"
+            "fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] min-w-[300px] max-w-[90vw] px-4 py-3 rounded-[12px] border backdrop-blur-xl bg-white/[0.05] shadow-2xl flex items-center gap-3",
+            colors[kind]
         )}
+        variants={ANIMATIONS.variants.snackbar}
+        initial="initial"
+        animate="animate"
+        exit="exit"
     >
       <Icon size={18} className={kind === 'success' ? 'text-green-500' : kind === 'warn' ? 'text-amber-500' : 'text-red-500'} />
       <span className="text-sm font-medium">{text}</span>
@@ -245,10 +253,10 @@ export const GestureBottomSheet: React.FC<GestureBottomSheetProps> = ({
         <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
           {/* [P1.1 UPGRADE] Backdrop with fade animation */}
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.25, ease: "easeOut" }}
+            variants={ANIMATIONS.variants.backdrop}
+            initial="initial"
+            animate="animate"
+            exit="exit"
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={onClose}
             aria-label="Close dialog"
@@ -258,16 +266,11 @@ export const GestureBottomSheet: React.FC<GestureBottomSheetProps> = ({
           {/* [P2.1 UPGRADE] Focus trap and accessibility */}
           <motion.div
             ref={sheetRef}
-            initial={{ y: "100%", opacity: 0 }}
-            animate={{ y: dy, opacity: 1 }}
-            exit={{ y: "100%", opacity: 0 }}
-            transition={{
-              type: "spring",
-              damping: 25,
-              stiffness: 300,
-              duration: 0.4
-            }}
-            className="relative w-full bg-[#161719] border-t border-white/10 rounded-t-[24px] shadow-2xl pb-safe"
+            variants={ANIMATIONS.variants.bottomSheet}
+            initial="initial"
+            animate={{ ...ANIMATIONS.variants.bottomSheet.animate, y: dy }}
+            exit="exit"
+            className="relative w-full backdrop-blur-xl bg-white/[0.05] border-t border-white/10 rounded-t-[24px] shadow-2xl pb-safe"
             onTouchStart={e => { startY.current = e.touches[0].clientY; }}
             onTouchMove={e => {
                 if (startY.current === null) return;
