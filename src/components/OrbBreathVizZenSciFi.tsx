@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { BreathPhase, ColorTheme, QualityTier } from '../types';
 import { AIConnectionStatus } from '../services/RustKernelBridge';
 import { setSpatialBreathParams } from '../services/audio'; // [NEW] Spatial Audio Sync
+import { ENHANCED_CORE_VERT, getEnhancedFragShader } from '../shaders/enhanced-orb-shaders'; // [ENHANCED] Design System V2
 
 type Props = {
   phase: BreathPhase;
@@ -297,8 +298,8 @@ function ZenOrb(props: Props) {
     }
   });
 
-  // Re-memoize shader to update octaves when tier changes
-  const fragShader = useMemo(() => getFragShader(tier.octaves), [tier.octaves]);
+  // [ENHANCED] Use enhanced fragment shader for better visual quality
+  const fragShader = useMemo(() => getEnhancedFragShader(tier.octaves), [tier.octaves]);
 
   return (
     <group ref={group}>
@@ -323,7 +324,7 @@ function ZenOrb(props: Props) {
         <sphereGeometry args={[0.72, Math.max(18, Math.floor(tier.seg * 0.8)), Math.max(18, Math.floor(tier.seg * 0.8))]} />
         <shaderMaterial
           ref={coreMat}
-          vertexShader={CORE_VERT}
+          vertexShader={ENHANCED_CORE_VERT}
           fragmentShader={fragShader}
           transparent
           depthWrite={false}

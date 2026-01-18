@@ -2,6 +2,7 @@
 import React, { useRef, useEffect } from 'react';
 import { Play, Pause, Square, Lock, Settings2, History, ChevronRight, Wind, Zap, Moon, Activity, Hexagon, Fingerprint } from 'lucide-react';
 import clsx from 'clsx';
+import { motion } from 'framer-motion';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -10,6 +11,7 @@ import { BREATHING_PATTERNS, BreathingType, BreathPattern, ColorTheme } from '..
 import { unlockAudio, cleanupAudio } from '../../services/audio';
 import { hapticTick } from '../../services/haptics';
 import { useKernel, useKernelState } from '../../kernel/KernelProvider';
+import { ANIMATIONS } from '../../design-system'; // [ENHANCED] Design System V2
 
 type FooterProps = {
   selectedPatternId: BreathingType;
@@ -222,7 +224,7 @@ export function Footer({ selectedPatternId, setSelectedPatternId }: FooterProps)
                   const isHighResonance = resonance > 0.7;
 
                   return (
-                    <button
+                    <motion.button
                       key={p.id}
                       data-selected={isSelected}
                       onClick={() => {
@@ -234,10 +236,21 @@ export function Footer({ selectedPatternId, setSelectedPatternId }: FooterProps)
                         }
                       }}
                       className={clsx(
-                        "snap-center shrink-0 w-[160px] h-[200px] rounded-[24px] p-5 flex flex-col justify-between text-left transition-all duration-500 ease-out border backdrop-blur-2xl relative overflow-hidden group",
+                        "snap-center shrink-0 w-[160px] h-[200px] rounded-[24px] p-5 flex flex-col justify-between text-left border backdrop-blur-2xl relative overflow-hidden group",
                         styles.card,
                         isHighResonance && !status.locked && isSelected && "ring-1 ring-emerald-500/50 shadow-[0_0_20px_-5px_rgba(16,185,129,0.3)]"
                       )}
+                      whileHover={!status.locked ? {
+                        scale: 1.03,
+                        y: -4,
+                        boxShadow: "0 10px 40px -15px rgba(255,255,255,0.2)"
+                      } : {}}
+                      whileTap={!status.locked ? { scale: 0.98 } : {}}
+                      transition={{
+                        type: "spring",
+                        stiffness: 400,
+                        damping: 20
+                      }}
                     >
                       {/* Top Section */}
                       <div className="relative z-10 w-full">
@@ -287,7 +300,7 @@ export function Footer({ selectedPatternId, setSelectedPatternId }: FooterProps)
                         {/* Visual Rhythm Bar */}
                         {!status.locked && <RhythmBar pattern={p} themeColor={styles.accent} />}
                       </div>
-                    </button>
+                    </motion.button>
                   )
                 })}
                 {/* Spacer for end of list */}
@@ -298,23 +311,32 @@ export function Footer({ selectedPatternId, setSelectedPatternId }: FooterProps)
             {/* Bottom Controls Row - Glass Pills */}
             <div className="px-6 flex items-center gap-4 h-[64px]">
               {/* History */}
-              <button
+              <motion.button
                 onClick={() => { triggerHaptic(); setHistoryOpen(true); }}
-                className="h-full aspect-[1.1/1] flex items-center justify-center rounded-2xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.08] active:scale-95 transition-all backdrop-blur-md group"
+                className="h-full aspect-[1.1/1] flex items-center justify-center rounded-2xl bg-white/[0.03] border border-white/10 backdrop-blur-md group"
+                whileHover={{ scale: 1.05, backgroundColor: "rgba(255,255,255,0.08)" }}
+                whileTap={{ scale: 0.95 }}
+                transition={{ type: "spring", stiffness: 400, damping: 20 }}
               >
                 <History size={20} className="text-white/40 group-hover:text-white/80 transition-colors" />
-              </button>
+              </motion.button>
 
               {/* Start Button - The Big Pill */}
-              <button
+              <motion.button
                 onClick={handleStart}
                 disabled={lockStatus.locked}
                 className={clsx(
-                  "flex-1 h-full rounded-2xl flex items-center justify-center gap-3 transition-all active:scale-[0.98] group relative overflow-hidden backdrop-blur-md",
+                  "flex-1 h-full rounded-2xl flex items-center justify-center gap-3 group relative overflow-hidden backdrop-blur-md",
                   lockStatus.locked
                     ? "bg-white/5 border border-white/10 cursor-not-allowed opacity-50"
-                    : "bg-white text-black hover:bg-white/90 shadow-[0_0_40px_-10px_rgba(255,255,255,0.2)]"
+                    : "bg-white text-black shadow-[0_0_40px_-10px_rgba(255,255,255,0.2)]"
                 )}
+                whileHover={!lockStatus.locked ? {
+                  scale: 1.02,
+                  backgroundColor: "rgba(255,255,255,0.9)"
+                } : {}}
+                whileTap={!lockStatus.locked ? { scale: 0.98 } : {}}
+                transition={{ type: "spring", stiffness: 400, damping: 20 }}
               >
                 {lockStatus.locked ? (
                   <Lock size={18} className="text-white/50" />
@@ -326,37 +348,58 @@ export function Footer({ selectedPatternId, setSelectedPatternId }: FooterProps)
                     <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform opacity-60" />
                   </>
                 )}
-              </button>
+              </motion.button>
 
               {/* Settings */}
-              <button
+              <motion.button
                 onClick={() => { triggerHaptic(); setSettingsOpen(true); }}
-                className="h-full aspect-[1.1/1] flex items-center justify-center rounded-2xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.08] active:scale-95 transition-all backdrop-blur-md group"
+                className="h-full aspect-[1.1/1] flex items-center justify-center rounded-2xl bg-white/[0.03] border border-white/10 backdrop-blur-md group"
+                whileHover={{ scale: 1.05, backgroundColor: "rgba(255,255,255,0.08)" }}
+                whileTap={{ scale: 0.95 }}
+                transition={{ type: "spring", stiffness: 400, damping: 20 }}
               >
                 <Settings2 size={20} className="text-white/40 group-hover:text-white/80 transition-colors" />
-              </button>
+              </motion.button>
             </div>
           </div>
         )}
 
         {isActive && (
-          <div className="px-6 grid grid-cols-2 gap-4 animate-in slide-in-from-bottom-20 fade-in duration-700 pb-4">
-            <button
+          <motion.div
+            className="px-6 grid grid-cols-2 gap-4 pb-4"
+            variants={ANIMATIONS.variants.slideUp}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+          >
+            <motion.button
               onClick={handleStop}
-              className="py-6 bg-white/[0.05] backdrop-blur-xl border border-white/5 hover:bg-red-500/10 text-white/50 hover:text-red-300 rounded-2xl font-medium flex items-center justify-center gap-3 transition-all active:scale-95"
+              className="py-6 bg-white/[0.05] backdrop-blur-xl border border-white/5 text-white/50 rounded-2xl font-medium flex items-center justify-center gap-3"
+              whileHover={{
+                backgroundColor: "rgba(239,68,68,0.1)",
+                color: "rgba(252,165,165,1)"
+              }}
+              whileTap={{ scale: 0.95 }}
+              transition={{ type: "spring", stiffness: 400, damping: 20 }}
             >
               <Square size={18} fill="currentColor" className="opacity-60" />
               <span className="text-[10px] tracking-[0.2em] uppercase">{t.ui.end}</span>
-            </button>
+            </motion.button>
 
-            <button
+            <motion.button
               onClick={handleTogglePause}
-              className="py-6 bg-white text-black hover:bg-gray-200 rounded-2xl font-medium flex items-center justify-center gap-3 transition-all active:scale-95"
+              className="py-6 bg-white text-black rounded-2xl font-medium flex items-center justify-center gap-3"
+              whileHover={{
+                backgroundColor: "rgba(229,231,235,1)",
+                scale: 1.02
+              }}
+              whileTap={{ scale: 0.95 }}
+              transition={{ type: "spring", stiffness: 400, damping: 20 }}
             >
               {isPaused ? <Play size={18} fill="currentColor" /> : <Pause size={18} fill="currentColor" />}
               <span className="text-[10px] tracking-[0.2em] uppercase font-bold">{isPaused ? t.ui.resume : t.ui.pause}</span>
-            </button>
-          </div>
+            </motion.button>
+          </motion.div>
         )}
       </div>
     </footer>
