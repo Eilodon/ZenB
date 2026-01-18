@@ -292,17 +292,28 @@ function WearableSection({ triggerHaptic }: { triggerHaptic: () => void }) {
   const {
     provider,
     setProvider,
+    runtime,
+    isAvailable,
     connectionState,
     isConnected,
     isLoading,
     error,
     heartRate,
+    hrv,
+    batteryLevel,
+    connectedDevice,
+    deviceHistory,
     connect,
+    reconnectLast,
+    reconnectDevice,
+    forgetDevice,
+    resetEnergyExpended,
     disconnect,
     availableProviders
   } = useWearable();
 
   const [expanded, setExpanded] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const handleProviderSelect = async (p: WearableProvider) => {
     triggerHaptic();
@@ -322,7 +333,30 @@ function WearableSection({ triggerHaptic }: { triggerHaptic: () => void }) {
     }
   };
 
+  const handleReconnectLast = async () => {
+    triggerHaptic();
+    await reconnectLast();
+  };
+
+  const handleReconnectDevice = async (id: string) => {
+    triggerHaptic();
+    await reconnectDevice(id);
+  };
+
+  const handleForgetDevice = async (id: string) => {
+    triggerHaptic();
+    await forgetDevice('generic_ble', id);
+  };
+
+  const handleResetEnergy = async () => {
+    triggerHaptic();
+    await resetEnergyExpended();
+  };
+
   const currentProvider = WEARABLE_PROVIDERS[provider];
+  const isBle = provider === 'generic_ble';
+  const bleHistory = deviceHistory.filter(d => d.provider === 'generic_ble');
+  const canReconnect = runtime === 'capacitor' || (typeof navigator !== 'undefined' && !!(navigator as any)?.bluetooth?.getDevices);
 
   return (
     <section>
@@ -362,6 +396,17 @@ function WearableSection({ triggerHaptic }: { triggerHaptic: () => void }) {
                     <>Using camera-based detection</>
                   )}
                 </div>
+                {connectedDevice?.name && provider !== 'none' && (
+                  <div className="text-[10px] text-white/30 mt-1">
+                    {connectedDevice.name}{connectedDevice.model ? ` • ${connectedDevice.model}` : ''}
+                    {batteryLevel !== null ? ` • ${batteryLevel}%` : ''}
+                  </div>
+                )}
+                {hrv && provider === 'generic_ble' && (
+                  <div className="text-[10px] text-white/25 mt-1 font-mono">
+                    HRV rmssd {hrv.rmssd.toFixed(0)}ms • sdnn {hrv.sdnn.toFixed(0)}ms
+                  </div>
+                )}
               </div>
             </div>
 
@@ -379,11 +424,17 @@ function WearableSection({ triggerHaptic }: { triggerHaptic: () => void }) {
             <div className="mt-3 text-xs text-red-400 bg-red-500/10 p-2 rounded-lg">{error}</div>
           )}
 
+          {isBle && !isAvailable && (
+            <div className="mt-3 text-xs text-yellow-200/80 bg-yellow-500/10 p-3 rounded-lg leading-relaxed">
+              Bluetooth LE isn’t available in this runtime (<span className="font-mono">{runtime}</span>). Use Chrome/Edge (Android/Desktop) or the native mobile build.
+            </div>
+          )}
+
           {/* Connect/Disconnect Button */}
           {provider !== 'none' && (
             <button
               onClick={handleConnect}
-              disabled={isLoading}
+              disabled={isLoading || (isBle && !isAvailable)}
               className={clsx(
                 "mt-4 w-full py-3 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-2",
                 isConnected
@@ -400,6 +451,75 @@ function WearableSection({ triggerHaptic }: { triggerHaptic: () => void }) {
                 <><Wifi size={14} /> Connect</>
               )}
             </button>
+          )}
+
+          {/* Reconnect helpers (Generic BLE only) */}
+          {isBle && !isConnected && bleHistory.length > 0 && (
+            <div className="mt-3 space-y-2">
+              <button
+                onClick={handleReconnectLast}
+                disabled={isLoading || !canReconnect}
+                className={clsx(
+                  "w-full py-2.5 rounded-xl text-[11px] font-medium transition-all flex items-center justify-center gap-2",
+                  canReconnect ? "bg-white/5 text-white/70 hover:bg-white/10" : "bg-white/5 text-white/30"
+                )}
+              >
+                <RefreshCw size={14} /> Reconnect last device{canReconnect ? '' : ' (browser limitation)'}
+              </button>
+
+              <button
+                onClick={() => { triggerHaptic(); setHistoryOpen(!historyOpen); }}
+                className="w-full py-2.5 rounded-xl text-[11px] font-medium bg-white/5 text-white/60 hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+              >
+                <Watch size={14} /> {historyOpen ? 'Hide' : 'Show'} device history
+              </button>
+
+              {historyOpen && (
+                <div className="bg-white/[0.02] rounded-xl border border-white/5 p-2 space-y-1">
+                  {bleHistory.map(d => (
+                    <div key={d.id} className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-white/5">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs text-white/80 truncate">{d.name}</div>
+                        <div className="text-[10px] text-white/25 truncate font-mono">{d.id}</div>
+                      </div>
+                      <button
+                        onClick={() => handleReconnectDevice(d.id)}
+                        disabled={isLoading || !canReconnect}
+                        className={clsx(
+                          "px-3 py-1.5 rounded-lg text-[10px] font-medium",
+                          canReconnect ? "bg-white/10 text-white/70 hover:bg-white/15" : "bg-white/5 text-white/30"
+                        )}
+                      >
+                        Reconnect
+                      </button>
+                      <button
+                        onClick={() => handleForgetDevice(d.id)}
+                        disabled={isLoading}
+                        className="px-2 py-1.5 rounded-lg text-[10px] font-medium bg-red-500/10 text-red-300 hover:bg-red-500/20"
+                      >
+                        Forget
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {isBle && isConnected && (
+            <div className="mt-3">
+              <button
+                onClick={handleResetEnergy}
+                disabled={isLoading}
+                className={clsx(
+                  "w-full py-2.5 rounded-xl text-[11px] font-medium transition-all flex items-center justify-center gap-2",
+                  "bg-white/5 text-white/60 hover:bg-white/10",
+                  isLoading && "opacity-50"
+                )}
+              >
+                Reset energy expended (if supported)
+              </button>
+            </div>
           )}
         </div>
 

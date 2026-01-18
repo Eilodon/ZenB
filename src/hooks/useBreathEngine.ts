@@ -7,6 +7,7 @@ import { useCameraVitals } from './useCameraVitals';
 import { useKernel } from '../kernel/KernelProvider';
 import { SafetyConfig } from '../config/SafetyConfig';
 import { ZenVitalsSnapshot } from '../vitals/snapshot';
+import { wearableService } from '../services/WearableService';
 
 type EngineRefs = {
     progressRef: React.MutableRefObject<number>;
@@ -38,10 +39,17 @@ export function useBreathEngine(): EngineRefs {
     // --- SENSOR DRIVER: CAMERA VITALS ---
     const { vitals, error: cameraError } = useCameraVitals(isActive && storeUserSettings.cameraVitalsEnabled);
     const vitalsRef = useRef<ZenVitalsSnapshot | null>(null);
+    const wearableRef = useRef(wearableService.getSnapshot());
 
     useEffect(() => {
         vitalsRef.current = vitals;
     }, [vitals]);
+
+    useEffect(() => {
+        return wearableService.subscribe(() => {
+            wearableRef.current = wearableService.getSnapshot();
+        });
+    }, []);
 
     useEffect(() => {
         setCameraError(cameraError);
@@ -150,7 +158,14 @@ export function useBreathEngine(): EngineRefs {
                 };
 
                 const latestVitals = vitalsRef.current;
-                if (latestVitals && latestVitals.quality.quality !== 'invalid') {
+                const wearableSnap = wearableRef.current;
+                const wearableHr = wearableSnap.latestData?.heartRate ?? null;
+
+                // Priority: if a wearable is connected, inject wearable HR into the kernel.
+                if (wearableSnap.provider !== 'none' && wearableSnap.connectionState === 'CONNECTED' && wearableHr !== null) {
+                    tickData.heart_rate = wearableHr;
+                    tickData.hr_confidence = 1.0;
+                } else if (latestVitals && latestVitals.quality.quality !== 'invalid') {
                     if (latestVitals.hr.value !== undefined) {
                         tickData.heart_rate = latestVitals.hr.value;
                         tickData.hr_confidence = latestVitals.hr.confidence;

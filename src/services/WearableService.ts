@@ -14,7 +14,7 @@
  * - Real-time HR streaming where supported
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 
 // =============================================================================
 // LOGGING UTILITY
@@ -31,6 +31,11 @@ const logger = {
 // =============================================================================
 
 import { BluetoothManager, bluetoothManager } from './BluetoothManager';
+import { detectRuntime } from '../platform/runtime';
+import { listWearableDeviceHistory, forgetWearableDeviceHistory, markWearableDeviceDisconnected, upsertWearableDeviceHistory, WearableDeviceHistoryRecord } from './wearables/deviceRegistry';
+import { parseHeartRateMeasurement } from './wearables/hrMeasurement';
+import { computeHrvFromRrMs } from './wearables/hrv';
+import { RingBuffer } from './wearables/ringBuffer';
 
 export type WearableProvider =
     | 'apple_watch'
@@ -71,12 +76,16 @@ export interface WearableDevice {
 }
 
 export interface WearableServiceState {
+    provider: WearableProvider;
+    runtime: 'web' | 'capacitor' | 'tauri' | 'unknown';
     isAvailable: boolean;
     connectionState: ConnectionState;
     connectedDevice: WearableDevice | null;
     latestData: WearableData | null;
     isStreaming: boolean;
+    isLoading: boolean;
     lastError: string | null;
+    deviceHistory: WearableDevice[];
 }
 
 // =============================================================================
@@ -175,7 +184,7 @@ abstract class BaseWearableProvider {
     protected connectionState: ConnectionState = 'DISCONNECTED';
     protected retryAttempt = 0;
     protected retryConfig: RetryConfig = DEFAULT_RETRY_CONFIG;
-    protected retryTimeout: number | null = null;
+    protected retryTimeout: ReturnType<typeof setTimeout> | null = null;
 
     abstract getHeartRate(): Promise<number | null>;
     abstract getHrv(): Promise<{ rmssd: number; sdnn: number } | null>;
@@ -201,7 +210,7 @@ abstract class BaseWearableProvider {
         this.connectionState = 'RECONNECTING';
         logger.info(`Retrying in ${delay}ms (attempt ${this.retryAttempt + 1})`);
 
-        this.retryTimeout = window.setTimeout(async () => {
+        this.retryTimeout = globalThis.setTimeout(async () => {
             this.retryAttempt++;
             const success = await fn();
             if (!success) {
@@ -641,11 +650,19 @@ class GarminWearableService extends BaseWearableProvider {
 
 class GenericBLEWearableService extends BaseWearableProvider {
     private currentHr: number | null = null;
+    private heartRateTimestamp: number | null = null;
+    private rrMs = new RingBuffer<number>(120);
+    private latestHrv: { rmssd: number; sdnn: number } | null = null;
+    private batteryLevel: number | null = null;
+    private sensorContact: 'not_supported' | 'not_detected' | 'detected' = 'not_supported';
+    private model: string | null = null;
+
+    private listeners = new Set<() => void>();
 
     constructor() {
         super();
         // Sync state from manager
-        bluetoothManager.setOnStateChange((state) => {
+        bluetoothManager.addStateListener((state) => {
             this.connectionState = state === 'CONNECTED' ? 'CONNECTED'
                 : state === 'CONNECTING' ? 'CONNECTING'
                     : state === 'ERROR' ? 'ERROR'
@@ -655,14 +672,38 @@ class GenericBLEWearableService extends BaseWearableProvider {
                 this.retryAttempt = 0;
             } else if (this.connectionState === 'DISCONNECTED') {
                 this.currentHr = null;
+                this.heartRateTimestamp = null;
+                this.rrMs.clear();
+                this.latestHrv = null;
+                this.batteryLevel = null;
+                this.sensorContact = 'not_supported';
+                this.model = null;
             }
+
+            this.notify();
         });
 
         // Listen for HR updates
-        bluetoothManager.setOnValueChange((uuid, value) => {
-            if (uuid.endsWith('2a37')) { // HR Measurement
-                this.currentHr = BluetoothManager.parseHeartRate(value);
+        bluetoothManager.addValueListener((_uuid, value) => {
+            try {
+                const m = parseHeartRateMeasurement(value);
+                this.currentHr = m.heartRate;
+                this.heartRateTimestamp = Date.now();
+                this.sensorContact = m.sensorContact;
+
+                if (m.rrIntervalsMs.length) {
+                    this.rrMs.pushMany(m.rrIntervalsMs);
+                    // Stabilize HRV: wait for a small window of RR intervals.
+                    const rr = this.rrMs.toArray();
+                    if (rr.length >= 10) {
+                        this.latestHrv = computeHrvFromRrMs(rr);
+                    }
+                }
+            } catch {
+                // ignore malformed frames
             }
+
+            this.notify();
         });
     }
 
@@ -672,8 +713,46 @@ class GenericBLEWearableService extends BaseWearableProvider {
         const success = await bluetoothManager.requestDevice();
         if (success) {
             await bluetoothManager.startHeartRateNotifications();
+            this.batteryLevel = await bluetoothManager.readBatteryLevel();
+            const info = await bluetoothManager.readDeviceInfo();
+            this.model = info?.model ?? null;
         }
         return success;
+    }
+
+    async reconnectLast(): Promise<boolean> {
+        const success = await bluetoothManager.reconnectLastDevice();
+        if (success) {
+            await bluetoothManager.startHeartRateNotifications();
+            this.batteryLevel = await bluetoothManager.readBatteryLevel();
+            const info = await bluetoothManager.readDeviceInfo();
+            this.model = info?.model ?? null;
+            this.notify();
+        }
+        return success;
+    }
+
+    async reconnectDevice(deviceId: string): Promise<boolean> {
+        const success = await bluetoothManager.reconnectDevice(deviceId);
+        if (success) {
+            await bluetoothManager.startHeartRateNotifications();
+            this.batteryLevel = await bluetoothManager.readBatteryLevel();
+            const info = await bluetoothManager.readDeviceInfo();
+            this.model = info?.model ?? null;
+            this.notify();
+        }
+        return success;
+    }
+
+    async resetEnergyExpended(): Promise<boolean> {
+        // Heart Rate Control Point (0x2A39): 0x01 = Reset Energy Expended (if supported).
+        const payload = new Uint8Array([0x01]);
+        return bluetoothManager.writeCharacteristic(
+            BluetoothManager.HR_SERVICE,
+            BluetoothManager.HR_CONTROL_POINT,
+            payload,
+            { withResponse: true }
+        );
     }
 
     disconnect(): void {
@@ -685,7 +764,42 @@ class GenericBLEWearableService extends BaseWearableProvider {
     }
 
     async getHrv(): Promise<{ rmssd: number; sdnn: number } | null> {
-        return null; // Not typically available via standard BLE generic profile without proprietary interpretation
+        return this.latestHrv;
+    }
+
+    getCurrentHeartRate(): number | null {
+        return this.currentHr;
+    }
+
+    getCurrentHrv(): { rmssd: number; sdnn: number } | null {
+        return this.latestHrv;
+    }
+
+    getBatteryLevel(): number | null {
+        return this.batteryLevel;
+    }
+
+    getHeartRateTimestamp(): number | null {
+        return this.heartRateTimestamp;
+    }
+
+    getSensorContact(): 'not_supported' | 'not_detected' | 'detected' {
+        return this.sensorContact;
+    }
+
+    getModel(): string | null {
+        return this.model;
+    }
+
+    subscribe(cb: () => void): () => void {
+        this.listeners.add(cb);
+        return () => this.listeners.delete(cb);
+    }
+
+    private notify() {
+        this.listeners.forEach((cb) => {
+            try { cb(); } catch { }
+        });
     }
 }
 
@@ -701,12 +815,81 @@ class WearableService {
     private garminService = new GarminWearableService();
     private bleService = new GenericBLEWearableService();
     private streamCleanup: (() => void) | null = null;
-    private lastError: string | null = null;
+
+    private state: WearableServiceState;
+    private subscribers = new Set<() => void>();
+    private lastBleConnectionState: ConnectionState = 'DISCONNECTED';
+
+    constructor() {
+        const runtime = detectRuntime();
+        this.state = {
+            provider: this.provider,
+            runtime,
+            isAvailable: this.isProviderAvailable(this.provider),
+            connectionState: 'DISCONNECTED',
+            connectedDevice: null,
+            latestData: null,
+            isStreaming: false,
+            isLoading: false,
+            lastError: null,
+            deviceHistory: [],
+        };
+
+        // Keep external state in sync for BLE (event-driven, no polling)
+        this.bleService.subscribe(() => {
+            if (this.provider !== 'generic_ble') return;
+            this.syncFromBle();
+        });
+
+        void this.refreshDeviceHistory();
+    }
+
+    subscribe(cb: () => void): () => void {
+        this.subscribers.add(cb);
+        return () => this.subscribers.delete(cb);
+    }
+
+    getSnapshot(): WearableServiceState {
+        return this.state;
+    }
+
+    private notify() {
+        this.subscribers.forEach((cb) => {
+            try { cb(); } catch { }
+        });
+    }
+
+    private setState(patch: Partial<WearableServiceState>) {
+        this.state = { ...this.state, ...patch };
+        this.notify();
+    }
+
+    private isProviderAvailable(provider: WearableProvider): boolean {
+        if (provider === 'none') return true;
+        if (provider === 'generic_ble') {
+            // Web Bluetooth (Chrome/Edge) OR native runtime adapters (Capacitor/Tauri; implemented separately)
+            const bt = (globalThis as any)?.navigator?.bluetooth;
+            if (bt) return true;
+            const rt = detectRuntime();
+            return rt === 'capacitor';
+        }
+        // Cloud providers are reachable from any runtime; actual auth is provider-dependent.
+        return true;
+    }
 
     setProvider(provider: WearableProvider) {
         // Disconnect from current provider
         this.disconnect();
         this.provider = provider;
+
+        this.setState({
+            provider,
+            isAvailable: this.isProviderAvailable(provider),
+            connectionState: provider === 'none' ? 'DISCONNECTED' : 'DISCONNECTED',
+            connectedDevice: null,
+            latestData: null,
+            lastError: null,
+        });
     }
 
     getProvider(): WearableProvider {
@@ -730,15 +913,81 @@ class WearableService {
 
     async connect(): Promise<boolean> {
         const service = this.getCurrentService();
-        if (!service) return false;
-
-        try {
-            this.lastError = null;
-            return await service.connect();
-        } catch (error) {
-            this.lastError = error instanceof Error ? error.message : 'Connection failed';
+        if (!service) {
+            this.setState({ lastError: 'No wearable provider selected', connectionState: 'DISCONNECTED' });
             return false;
         }
+
+        try {
+            this.setState({ isLoading: true, lastError: null, connectionState: 'CONNECTING' });
+            const ok = await service.connect();
+
+            if (this.provider === 'generic_ble') {
+                // BLE provider drives state via events; ensure we sync once post-connect.
+                this.syncFromBle();
+            } else {
+                this.setState({ connectionState: service.getConnectionState() });
+                const data = await this.getData();
+                this.setState({
+                    connectedDevice: ok ? {
+                        id: `${this.provider}:account`,
+                        name: WEARABLE_PROVIDERS[this.provider]?.name ?? this.provider,
+                        provider: this.provider,
+                        model: 'cloud',
+                        isConnected: ok,
+                        lastSync: new Date().toISOString(),
+                    } : null,
+                    latestData: ok ? data : null,
+                });
+            }
+
+            if (!ok) {
+                const err = bluetoothManager.getLastError();
+                const msg = err?.message || 'Connection failed';
+                // User cancel should not surface as an error banner.
+                const suppressed = err?.code === 'USER_CANCELLED';
+                this.setState({ lastError: suppressed ? null : msg, connectionState: suppressed ? 'DISCONNECTED' : 'ERROR' });
+            }
+
+            this.setState({ isLoading: false });
+            return ok;
+        } catch (error) {
+            this.setState({
+                isLoading: false,
+                lastError: error instanceof Error ? error.message : 'Connection failed',
+                connectionState: 'ERROR',
+            });
+            return false;
+        }
+    }
+
+    async reconnectLast(): Promise<boolean> {
+        if (this.provider !== 'generic_ble') return false;
+        this.setState({ isLoading: true, lastError: null, connectionState: 'RECONNECTING' });
+        const ok = await this.bleService.reconnectLast();
+        this.syncFromBle();
+        this.setState({ isLoading: false });
+        return ok;
+    }
+
+    async reconnectDevice(deviceId: string): Promise<boolean> {
+        if (this.provider !== 'generic_ble') return false;
+        this.setState({ isLoading: true, lastError: null, connectionState: 'RECONNECTING' });
+        const ok = await this.bleService.reconnectDevice(deviceId);
+        this.syncFromBle();
+        this.setState({ isLoading: false });
+        return ok;
+    }
+
+    async resetEnergyExpended(): Promise<boolean> {
+        if (this.provider !== 'generic_ble') return false;
+        if (this.state.connectionState !== 'CONNECTED') return false;
+        const ok = await this.bleService.resetEnergyExpended();
+        if (!ok) {
+            const err = bluetoothManager.getLastError();
+            this.setState({ lastError: err?.message ?? 'Failed to write control point' });
+        }
+        return ok;
     }
 
     disconnect(): void {
@@ -750,6 +999,13 @@ class WearableService {
         const service = this.getCurrentService();
         if (service) {
             service.disconnect();
+        }
+
+        if (this.provider !== 'none') {
+            this.setState({
+                connectionState: 'DISCONNECTED',
+                latestData: null,
+            });
         }
     }
 
@@ -776,16 +1032,34 @@ class WearableService {
             stressLevel = await this.garminService.getStressLevel();
         }
 
+        const batteryLevel = this.provider === 'generic_ble'
+            ? this.bleService.getBatteryLevel()
+            : null;
+
+        const heartRateTimestamp = this.provider === 'generic_ble'
+            ? this.bleService.getHeartRateTimestamp()
+            : (hr ? Date.now() : null);
+
         return {
             heartRate: hr,
-            heartRateTimestamp: hr ? Date.now() : null,
+            heartRateTimestamp,
             hrv,
             steps: null,
             calories: null,
             sleepScore: null,
             stressLevel,
-            batteryLevel: null,
+            batteryLevel,
         };
+    }
+
+    async refreshData(): Promise<void> {
+        if (this.provider === 'generic_ble') {
+            this.syncFromBle();
+            return;
+        }
+
+        const data = await this.getData();
+        this.setState({ latestData: data });
     }
 
     startHeartRateStream(callback: (hr: number) => void) {
@@ -809,17 +1083,119 @@ class WearableService {
     }
 
     getConnectionState(): ConnectionState {
-        const service = this.getCurrentService();
-        return service?.getConnectionState() || 'DISCONNECTED';
+        return this.state.connectionState;
     }
 
     isConnected(): boolean {
-        const service = this.getCurrentService();
-        return service?.isConnected() || false;
+        return this.state.connectionState === 'CONNECTED';
     }
 
     getLastError(): string | null {
-        return this.lastError;
+        return this.state.lastError;
+    }
+
+    async refreshDeviceHistory(): Promise<void> {
+        const list = await listWearableDeviceHistory();
+        const devices: WearableDevice[] = list
+            .filter((r) => r.provider in WEARABLE_PROVIDERS)
+            .map((r) => ({
+                id: r.id,
+                name: r.name ?? 'Unknown device',
+                provider: r.provider as WearableProvider,
+                model: r.model ?? (r.provider === 'generic_ble' ? 'BLE Heart Rate' : 'cloud'),
+                isConnected: this.state.provider === r.provider && this.state.connectedDevice?.id === r.id && this.state.connectionState === 'CONNECTED',
+                lastSync: r.lastConnectedAt ? new Date(r.lastConnectedAt).toISOString() : null,
+            }));
+        this.setState({ deviceHistory: devices });
+    }
+
+    async forgetDevice(provider: WearableProvider, id: string): Promise<void> {
+        if (provider === 'generic_ble') {
+            if (this.state.connectedDevice?.id === id) this.disconnect();
+            if (bluetoothManager.getLastDeviceId() === id) bluetoothManager.clearLastDeviceId();
+        }
+        await forgetWearableDeviceHistory(provider, id);
+        await this.refreshDeviceHistory();
+    }
+
+    private syncFromBle() {
+        const connectionState = this.bleService.getConnectionState();
+
+        const hr = this.bleService.getCurrentHeartRate();
+        const hrv = this.bleService.getCurrentHrv();
+        const batteryLevel = this.bleService.getBatteryLevel();
+        const heartRateTimestamp = this.bleService.getHeartRateTimestamp();
+
+        const data: WearableData | null = (hr !== null || hrv !== null || batteryLevel !== null)
+            ? {
+                heartRate: hr,
+                heartRateTimestamp,
+                hrv,
+                steps: null,
+                calories: null,
+                sleepScore: null,
+                stressLevel: null,
+                batteryLevel,
+            }
+            : null;
+
+        const btErr = bluetoothManager.getLastError();
+        const lastError =
+            connectionState === 'ERROR'
+                ? (btErr?.message ?? 'Bluetooth error')
+                : null;
+
+        const selected = bluetoothManager.getSelectedDeviceInfo();
+        const model = this.bleService.getModel() ?? 'BLE Heart Rate';
+
+        let connectedDevice = this.state.connectedDevice;
+        if (selected) {
+            connectedDevice = {
+                id: selected.id,
+                name: selected.name ?? 'BLE Device',
+                provider: 'generic_ble',
+                model,
+                isConnected: connectionState === 'CONNECTED',
+                lastSync: connectedDevice?.lastSync ?? (connectionState === 'CONNECTED' ? new Date().toISOString() : null),
+            };
+        } else if (connectedDevice && connectedDevice.provider === 'generic_ble') {
+            connectedDevice = { ...connectedDevice, isConnected: connectionState === 'CONNECTED' };
+        }
+
+        // Persist connect/disconnect transitions into device history.
+        if (connectionState !== this.lastBleConnectionState) {
+            const now = Date.now();
+
+            if (connectionState === 'CONNECTED' && this.lastBleConnectionState !== 'CONNECTED' && selected) {
+                const record: WearableDeviceHistoryRecord = {
+                    id: selected.id,
+                    name: selected.name,
+                    provider: 'generic_ble',
+                    model,
+                    transport: this.state.runtime,
+                    lastConnectedAt: now,
+                    lastBatteryLevel: batteryLevel ?? undefined,
+                    lastSeenAt: now,
+                };
+                void upsertWearableDeviceHistory(record).then(() => this.refreshDeviceHistory());
+            }
+
+            if (connectionState === 'DISCONNECTED' && this.lastBleConnectionState === 'CONNECTED' && this.state.connectedDevice?.provider === 'generic_ble') {
+                void markWearableDeviceDisconnected('generic_ble', this.state.connectedDevice.id).then(() => this.refreshDeviceHistory());
+            }
+
+            this.lastBleConnectionState = connectionState;
+        }
+
+        this.setState({
+            isAvailable: this.isProviderAvailable('generic_ble'),
+            connectionState,
+            connectedDevice,
+            latestData: data,
+            lastError,
+            // BLE updates imply connect flow completed (even if it failed).
+            isLoading: connectionState === 'CONNECTING' || connectionState === 'RECONNECTING' ? this.state.isLoading : false,
+        });
     }
 
     // Provider-specific configuration
@@ -844,78 +1220,77 @@ export const wearableService = new WearableService();
 // =============================================================================
 
 export function useWearable() {
-    const [provider, setProviderState] = useState<WearableProvider>(wearableService.getProvider());
-    const [connectionState, setConnectionState] = useState<ConnectionState>('DISCONNECTED');
-    const [heartRate, setHeartRate] = useState<number | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const snapshot = useSyncExternalStore(
+        (cb) => wearableService.subscribe(cb),
+        () => wearableService.getSnapshot(),
+        () => wearableService.getSnapshot()
+    );
 
     const setProvider = useCallback(async (p: WearableProvider) => {
         wearableService.setProvider(p);
-        setProviderState(p);
-        setConnectionState('DISCONNECTED');
-        setHeartRate(null);
-        setError(null);
     }, []);
 
     const connect = useCallback(async () => {
-        setIsLoading(true);
-        setError(null);
+        return wearableService.connect();
+    }, []);
 
-        const success = await wearableService.connect();
-        setConnectionState(wearableService.getConnectionState());
-        setIsLoading(false);
+    const reconnectLast = useCallback(async () => {
+        return wearableService.reconnectLast();
+    }, []);
 
-        if (success) {
-            const hr = await wearableService.getHeartRate();
-            setHeartRate(hr);
-        } else {
-            setError(wearableService.getLastError());
-        }
-
-        return success;
+    const reconnectDevice = useCallback(async (deviceId: string) => {
+        return wearableService.reconnectDevice(deviceId);
     }, []);
 
     const disconnect = useCallback(() => {
         wearableService.disconnect();
-        setConnectionState('DISCONNECTED');
-        setHeartRate(null);
     }, []);
 
     const refresh = useCallback(async () => {
-        if (!wearableService.isConnected()) return;
-        const hr = await wearableService.getHeartRate();
-        setHeartRate(hr);
+        await wearableService.refreshData();
     }, []);
 
-    // Poll heart rate while connected
-    useEffect(() => {
-        if (connectionState !== 'CONNECTED') return;
+    const refreshDeviceHistory = useCallback(async () => {
+        await wearableService.refreshDeviceHistory();
+    }, []);
 
-        const interval = setInterval(refresh, 10000);
-        return () => clearInterval(interval);
-    }, [connectionState, refresh]);
+    const forgetDevice = useCallback(async (provider: WearableProvider, id: string) => {
+        await wearableService.forgetDevice(provider, id);
+    }, []);
 
-    // Sync connection state
-    useEffect(() => {
-        const check = setInterval(() => {
-            setConnectionState(wearableService.getConnectionState());
-        }, 1000);
-        return () => clearInterval(check);
+    const resetEnergyExpended = useCallback(async () => {
+        return wearableService.resetEnergyExpended();
     }, []);
 
     return {
-        provider,
+        provider: snapshot.provider,
+        runtime: snapshot.runtime,
+        isAvailable: snapshot.isAvailable,
+
+        connectionState: snapshot.connectionState,
+        isConnected: snapshot.connectionState === 'CONNECTED',
+        isLoading: snapshot.isLoading,
+        error: snapshot.lastError,
+
+        connectedDevice: snapshot.connectedDevice,
+        latestData: snapshot.latestData,
+        heartRate: snapshot.latestData?.heartRate ?? null,
+        hrv: snapshot.latestData?.hrv ?? null,
+        batteryLevel: snapshot.latestData?.batteryLevel ?? null,
+
+        deviceHistory: snapshot.deviceHistory,
+
         setProvider,
-        connectionState,
-        isConnected: connectionState === 'CONNECTED',
-        isLoading,
-        error,
-        heartRate,
         connect,
+        reconnectLast,
+        reconnectDevice,
         disconnect,
         refresh,
-        providerConfig: WEARABLE_PROVIDERS[provider],
+        refreshDeviceHistory,
+        forgetDevice,
+        resetEnergyExpended,
+
+        providerConfig: WEARABLE_PROVIDERS[snapshot.provider],
         availableProviders: Object.entries(WEARABLE_PROVIDERS).map(([key, config]) => ({
             id: key as WearableProvider,
             ...config,
