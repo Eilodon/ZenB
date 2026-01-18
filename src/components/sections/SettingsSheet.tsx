@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { Volume2, VolumeX, Smartphone, SmartphoneNfc, Music, Check, Terminal, ShieldAlert, Sparkles, Key, ExternalLink, TestTube2, Watch, WifiOff, Wifi, RefreshCw, Heart } from 'lucide-react';
+import { Volume2, VolumeX, Smartphone, SmartphoneNfc, Music, Check, Terminal, ShieldAlert, Sparkles, Key, ExternalLink, TestTube2, Watch, WifiOff, Wifi, RefreshCw, Heart, ChevronDown } from 'lucide-react';
 import clsx from 'clsx';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -123,34 +123,15 @@ export function SettingsSheet() {
             </div>
           </section>
 
-          <section>
-            <div className="text-white/30 font-caps text-[9px] tracking-[0.2em] mb-4 flex items-center gap-2 pl-1">{t.settings.immersion}</div>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <button onClick={() => { triggerHaptic(); toggleSound(); }} className={clsx("p-5 rounded-[1.5rem] flex flex-col items-center gap-3 transition-all border", userSettings.soundEnabled ? "bg-white/10 border-white/20 text-white" : "bg-transparent border-white/5 text-white/30")}>
-                  {userSettings.soundEnabled ? <Volume2 size={24} strokeWidth={1} /> : <VolumeX size={24} strokeWidth={1} />}
-                  <span className="text-xs font-medium tracking-wide">{t.settings.sounds}</span>
-                </button>
-                <button onClick={() => { triggerHaptic(); toggleHaptic(); }} className={clsx("p-5 rounded-[1.5rem] flex flex-col items-center gap-3 transition-all border", userSettings.hapticEnabled ? "bg-white/10 border-white/20 text-white" : "bg-transparent border-white/5 text-white/30")}>
-                  {userSettings.hapticEnabled ? <Smartphone size={24} strokeWidth={1} /> : <SmartphoneNfc size={24} strokeWidth={1} />}
-                  <span className="text-xs font-medium tracking-wide">{t.settings.haptics}</span>
-                </button>
-              </div>
-
-              {userSettings.soundEnabled && (
-                <div className="bg-white/[0.02] rounded-[1.5rem] border border-white/5 p-5">
-                  <div className="text-[9px] text-white/40 uppercase font-bold mb-4 tracking-[0.2em] flex items-center gap-2"><Music size={12} /> {t.settings.soundPack}</div>
-                  <div className="grid grid-cols-1 gap-1">
-                    {soundPacks.map(pack => (
-                      <button key={pack} onClick={() => { triggerHaptic(); setSoundPack(pack); }} className={clsx("w-full text-left px-4 py-3.5 rounded-xl text-xs font-medium tracking-wide transition-all flex items-center justify-between group", userSettings.soundPack === pack ? "bg-white/10 text-white shadow-sm" : "text-white/40 hover:bg-white/5 hover:text-white")}>
-                        {t.settings.soundPacks[pack]}{userSettings.soundPack === pack && <Check size={14} />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </section>
+          <SoundSettingsSection
+            triggerHaptic={triggerHaptic}
+            t={t}
+            userSettings={userSettings}
+            toggleSound={toggleSound}
+            toggleHaptic={toggleHaptic}
+            setSoundPack={setSoundPack}
+            soundPacks={soundPacks}
+          />
 
           <section>
             <div className="text-white/30 font-caps text-[9px] tracking-[0.2em] mb-4 flex items-center gap-2 pl-1">{t.settings.visuals}</div>
@@ -220,6 +201,86 @@ export function SettingsSheet() {
         </div>
       </GestureBottomSheet>
     </>
+  );
+}
+
+// =============================================================================
+// SOUND SETTINGS COMPONENT
+// =============================================================================
+
+function SoundSettingsSection({
+  triggerHaptic, t, userSettings, toggleSound, toggleHaptic, setSoundPack, soundPacks
+}: {
+  triggerHaptic: () => void,
+  t: any,
+  userSettings: any,
+  toggleSound: () => void,
+  toggleHaptic: () => void,
+  setSoundPack: (pack: SoundPack) => void,
+  soundPacks: SoundPack[]
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  // Auto-expand when enabling sound
+  useEffect(() => {
+    if (userSettings.soundEnabled && !expanded) setExpanded(true);
+  }, [userSettings.soundEnabled]);
+
+  return (
+    <section>
+      <div className="text-white/30 font-caps text-[9px] tracking-[0.2em] mb-4 flex items-center gap-2 pl-1">{t.settings.immersion}</div>
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          {/* Sound Toggle */}
+          <button
+            onClick={() => { triggerHaptic(); toggleSound(); }}
+            className={clsx(
+              "p-5 rounded-[1.5rem] flex flex-col items-center gap-3 transition-all border relative overflow-hidden",
+              userSettings.soundEnabled ? "bg-white/10 border-white/20 text-white" : "bg-transparent border-white/5 text-white/30"
+            )}
+          >
+            {userSettings.soundEnabled ? <Volume2 size={24} strokeWidth={1} /> : <VolumeX size={24} strokeWidth={1} />}
+            <span className="text-xs font-medium tracking-wide">{t.settings.sounds}</span>
+
+            {/* Expand chevron for sound pack */}
+            {userSettings.soundEnabled && (
+              <div
+                className="absolute right-3 top-3 p-1 rounded-full bg-white/5 text-white/40 hover:bg-white/10 hover:text-white transition-colors"
+                onClick={(e) => { e.stopPropagation(); triggerHaptic(); setExpanded(!expanded); }}
+              >
+                <ChevronDown size={12} className={clsx("transition-transform duration-300", expanded ? "rotate-180" : "rotate-0")} />
+              </div>
+            )}
+          </button>
+
+          {/* Haptic Toggle */}
+          <button
+            onClick={() => { triggerHaptic(); toggleHaptic(); }}
+            className={clsx(
+              "p-5 rounded-[1.5rem] flex flex-col items-center gap-3 transition-all border",
+              userSettings.hapticEnabled ? "bg-white/10 border-white/20 text-white" : "bg-transparent border-white/5 text-white/30"
+            )}
+          >
+            {userSettings.hapticEnabled ? <Smartphone size={24} strokeWidth={1} /> : <SmartphoneNfc size={24} strokeWidth={1} />}
+            <span className="text-xs font-medium tracking-wide">{t.settings.haptics}</span>
+          </button>
+        </div>
+
+        {/* Collapsible Sound Pack Selection */}
+        <div className={clsx("transition-all duration-300 overflow-hidden", expanded && userSettings.soundEnabled ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0")}>
+          <div className="bg-white/[0.02] rounded-[1.5rem] border border-white/5 p-5 mt-2">
+            <div className="text-[9px] text-white/40 uppercase font-bold mb-4 tracking-[0.2em] flex items-center gap-2"><Music size={12} /> {t.settings.soundPack}</div>
+            <div className="grid grid-cols-1 gap-1">
+              {soundPacks.map(pack => (
+                <button key={pack} onClick={() => { triggerHaptic(); setSoundPack(pack); }} className={clsx("w-full text-left px-4 py-3.5 rounded-xl text-xs font-medium tracking-wide transition-all flex items-center justify-between group", userSettings.soundPack === pack ? "bg-white/10 text-white shadow-sm" : "text-white/40 hover:bg-white/5 hover:text-white")}>
+                  {t.settings.soundPacks[pack]}{userSettings.soundPack === pack && <Check size={14} />}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 

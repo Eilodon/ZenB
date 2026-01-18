@@ -30,11 +30,14 @@ const logger = {
 // TYPES
 // =============================================================================
 
+import { BluetoothManager, bluetoothManager } from './BluetoothManager';
+
 export type WearableProvider =
     | 'apple_watch'
     | 'xiaomi'        // Mi Band, Redmi Band, Amazfit
     | 'fitbit'
     | 'garmin'
+    | 'generic_ble'
     | 'none';
 
 export type ConnectionState =
@@ -132,6 +135,14 @@ export const WEARABLE_PROVIDERS: Record<WearableProvider, ProviderConfig> = {
         sdkRequired: null,
         capabilities: ['camera_rppg'],
         models: [],
+    },
+    generic_ble: {
+        name: 'Bluetooth LE',
+        icon: '🔵',
+        description: 'Standard Heart Rate Monitor (Polar, Wahoo, etc.)',
+        sdkRequired: 'web-bluetooth',
+        capabilities: ['heart_rate'],
+        models: ['Polar H10', 'Wahoo Tickr', 'Generic BLE HR'],
     },
 };
 
@@ -625,6 +636,60 @@ class GarminWearableService extends BaseWearableProvider {
 }
 
 // =============================================================================
+// GENERIC BLE INTEGRATION
+// =============================================================================
+
+class GenericBLEWearableService extends BaseWearableProvider {
+    private currentHr: number | null = null;
+
+    constructor() {
+        super();
+        // Sync state from manager
+        bluetoothManager.setOnStateChange((state) => {
+            this.connectionState = state === 'CONNECTED' ? 'CONNECTED'
+                : state === 'CONNECTING' ? 'CONNECTING'
+                    : state === 'ERROR' ? 'ERROR'
+                        : 'DISCONNECTED';
+
+            if (this.connectionState === 'CONNECTED') {
+                this.retryAttempt = 0;
+            } else if (this.connectionState === 'DISCONNECTED') {
+                this.currentHr = null;
+            }
+        });
+
+        // Listen for HR updates
+        bluetoothManager.setOnValueChange((uuid, value) => {
+            if (uuid.endsWith('2a37')) { // HR Measurement
+                this.currentHr = BluetoothManager.parseHeartRate(value);
+            }
+        });
+    }
+
+    async connect(): Promise<boolean> {
+        // Request device and connect
+        // This triggers the browser picker
+        const success = await bluetoothManager.requestDevice();
+        if (success) {
+            await bluetoothManager.startHeartRateNotifications();
+        }
+        return success;
+    }
+
+    disconnect(): void {
+        bluetoothManager.disconnect();
+    }
+
+    async getHeartRate(): Promise<number | null> {
+        return this.currentHr;
+    }
+
+    async getHrv(): Promise<{ rmssd: number; sdnn: number } | null> {
+        return null; // Not typically available via standard BLE generic profile without proprietary interpretation
+    }
+}
+
+// =============================================================================
 // UNIFIED WEARABLE SERVICE
 // =============================================================================
 
@@ -634,6 +699,7 @@ class WearableService {
     private appleService = new AppleWatchService();
     private fitbitService = new FitbitWearableService();
     private garminService = new GarminWearableService();
+    private bleService = new GenericBLEWearableService();
     private streamCleanup: (() => void) | null = null;
     private lastError: string | null = null;
 
@@ -657,6 +723,7 @@ class WearableService {
             case 'xiaomi': return this.xiaomiService;
             case 'fitbit': return this.fitbitService;
             case 'garmin': return this.garminService;
+            case 'generic_ble': return this.bleService;
             default: return null;
         }
     }

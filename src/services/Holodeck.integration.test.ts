@@ -17,12 +17,17 @@ const DEFAULT_SETTINGS = {
   language: 'en' as const,
   soundPack: 'synth' as const,
   streak: 0,
+  lastSession: null,
+  totalMinutes: 0,
+  dailyGoal: 15,
+  completedSessions: 0,
   lastBreathDate: '',
   lastUsedPattern: '4-7-8' as const,
   safetyRegistry: {},
   cameraVitalsEnabled: false,
   showKernelMonitor: false,
   aiCoachEnabled: false,
+  coachingEnabled: false,
 };
 
 function resetStores() {
