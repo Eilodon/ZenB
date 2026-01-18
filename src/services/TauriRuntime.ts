@@ -15,13 +15,9 @@ import { detectRuntime } from '../platform/runtime';
 
 // Types matching Rust FFI structs (already defined in RustKernelBridge.ts)
 import type {
-    FfiPhase,
-    FfiBeliefState,
-    FfiResonance,
     FfiFrame,
     FfiSessionStats,
     FfiRuntimeState,
-    FfiSafetyStatus
 } from './RustKernelBridge';
 
 let invokeFunc: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;

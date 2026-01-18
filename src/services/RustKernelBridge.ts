@@ -28,7 +28,7 @@ import { SafetyMonitor } from './SafetyMonitor';
 import { UKFStateEstimator } from './UKFStateEstimator';
 
 // Tauri integration
-import { initTauriInvoke, isTauriAvailable, getTauriRuntime, TauriZenOneRuntime } from './TauriRuntime';
+import { initTauriInvoke, getTauriRuntime, TauriZenOneRuntime } from './TauriRuntime';
 
 // ============================================================================
 // FFI TYPE DEFINITIONS (matches rust-core/src/zenone.udl)
@@ -393,7 +393,7 @@ export type Middleware = (
 export class RustKernelBridge {
     private runtime: MockZenOneRuntime;
     private tauriRuntime: TauriZenOneRuntime | null = null;
-    private useTauri: boolean = false;
+    private _useTauri: boolean = false;
     private state: RuntimeState;
     private subscribers = new Set<(state: RuntimeState) => void>();
     private middlewares: Middleware[] = [];
@@ -426,7 +426,7 @@ export class RustKernelBridge {
             const available = await initTauriInvoke();
             if (available) {
                 this.tauriRuntime = getTauriRuntime();
-                this.useTauri = true;
+                this._useTauri = true;
                 console.log('[RustKernelBridge] Tauri runtime enabled - using native Rust kernel');
                 // Sync initial state from Rust
                 const rustState = await this.tauriRuntime.get_state();
@@ -438,6 +438,13 @@ export class RustKernelBridge {
         } catch (e) {
             console.warn('[RustKernelBridge] Tauri init failed, using mock:', e);
         }
+    }
+
+    /**
+     * Check if Tauri runtime is active
+     */
+    get isUsingTauri(): boolean {
+        return this._useTauri;
     }
 
     // =========================================================================

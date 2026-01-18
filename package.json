@@ -15,7 +15,11 @@
     "cap:open:android": "cap open android",
     "cap:open:ios": "cap open ios",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "tauri": "tauri",
+    "tauri:android:init": "tauri android init",
+    "tauri:android:dev": "tauri android dev",
+    "tauri:android:build": "tauri android build"
   },
   "dependencies": {
     "@capacitor-community/bluetooth-le": "^7.3.0",
