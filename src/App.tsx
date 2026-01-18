@@ -77,6 +77,21 @@ export default function App() {
     return () => mgr.dispose();
   }, [t.ui.offline, t.ui.online]);
 
+  useEffect(() => {
+    const showSnackbar = useUIStore.getState().showSnackbar;
+    const handleFallback = (event: Event) => {
+      const detail = (event as CustomEvent).detail as { pack?: string };
+      const packId = detail?.pack;
+      const packLabel = packId && packId in t.settings.soundPacks
+        ? t.settings.soundPacks[packId as keyof typeof t.settings.soundPacks]
+        : (packId || t.settings.sounds);
+      const message = t.ui.audioFallback.replace('{pack}', packLabel);
+      showSnackbar(message, 'warn');
+    };
+    window.addEventListener('zen:audio:fallback', handleFallback);
+    return () => window.removeEventListener('zen:audio:fallback', handleFallback);
+  }, [t]);
+
   // --- GEMINI SOMATIC BRIDGE LIFECYCLE ---
   useEffect(() => {
     const shouldConnect = userSettings.aiCoachEnabled && isActive && isOnline;

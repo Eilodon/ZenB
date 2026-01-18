@@ -558,10 +558,16 @@ export class RustKernelBridge {
             belief = ffiBeliefToBeliefState(frame.belief, frame.resonance);
         }
 
+        const nextPhase = ffiPhaseToBreathPhase(frame.phase);
+        const phaseChanged = beforeState.phase !== nextPhase;
+        const nextPhaseDuration = this.getPhaseDuration(nextPhase);
+
         this.state = {
             ...this.state,
-            phase: ffiPhaseToBreathPhase(frame.phase),
-            phaseElapsed: frame.phase_progress * this.getPhaseDuration(ffiPhaseToBreathPhase(frame.phase)),
+            phase: nextPhase,
+            phaseStartTime: phaseChanged ? Date.now() : this.state.phaseStartTime,
+            phaseDuration: nextPhaseDuration,
+            phaseElapsed: frame.phase_progress * nextPhaseDuration,
             cycleCount: frame.cycles_completed,
             belief,
             lastObservation: observation,
@@ -570,9 +576,21 @@ export class RustKernelBridge {
         };
 
         // Run middlewares
-        const event: KernelEvent = { type: 'TICK', dt, observation, timestamp: Date.now() };
         const api = { queue: (cmd: KernelEvent) => this.dispatch(cmd) };
-        this.middlewares.forEach(mw => mw(event, beforeState, this.state, api));
+        const now = Date.now();
+
+        if (phaseChanged) {
+            const phaseEvent: KernelEvent = { type: 'PHASE_TRANSITION', from: beforeState.phase, to: nextPhase, timestamp: now };
+            this.middlewares.forEach(mw => mw(phaseEvent, beforeState, this.state, api));
+        }
+
+        if (frame.cycles_completed > beforeState.cycleCount) {
+            const cycleEvent: KernelEvent = { type: 'CYCLE_COMPLETE', count: frame.cycles_completed, timestamp: now };
+            this.middlewares.forEach(mw => mw(cycleEvent, beforeState, this.state, api));
+        }
+
+        const tickEvent: KernelEvent = { type: 'TICK', dt, observation, timestamp: now };
+        this.middlewares.forEach(mw => mw(tickEvent, beforeState, this.state, api));
 
         this.notify();
     }

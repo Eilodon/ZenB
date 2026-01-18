@@ -83,7 +83,8 @@ All audio files should meet these specs:
 - **Format:** MP3 (128-320 kbps) or WAV (48kHz, 16-24 bit)
 - **Channels:** Stereo
 - **Loop Duration:** 60 seconds (seamless loops for soundscapes)
-- **Dynamic Range:** -18 LUFS (breathable, not compressed)
+- **Dynamic Range:** -18 LUFS (EBU R128 / ITU-R BS.1770)
+- **True Peak:** <= -1.0 dBTP
 - **Frequency Range:** 60Hz - 12kHz (warm, no harshness)
 
 ## ✅ Verification
@@ -95,6 +96,20 @@ npm run dev
 # Navigate to Settings > Audio > Sound Pack
 # Select different packs and test playback
 ```
+
+## ✅ Audio Validator (Release Gate)
+
+Before release, run the automated validator:
+
+```bash
+npm run validate:audio
+```
+
+The validator enforces:
+
+- 1:1 manifest mapping (no missing/extra files)
+- EBU R128 integrated loudness + true-peak targets
+- Seamless loop checks for ambient/soundscape assets
 
 ## 🎨 Current Status
 

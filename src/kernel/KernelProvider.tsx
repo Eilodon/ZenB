@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useRef, useEffect, useState } from 'react';
 console.log('[ZenB] Module: KernelProvider.tsx loading...');
 import { RustKernelBridge, RuntimeState } from '../services/RustKernelBridge';
+import { audioMiddleware, hapticMiddleware } from '../services/kernelMiddleware';
 
 const KernelContext = createContext<{ kernel: RustKernelBridge; state: RuntimeState } | null>(null);
 
@@ -10,6 +11,8 @@ export const KernelProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   if (!kernelRef.current) {
     kernelRef.current = new RustKernelBridge();
+    kernelRef.current.use(audioMiddleware);
+    kernelRef.current.use(hapticMiddleware);
   }
 
   const [state, setState] = useState<RuntimeState>(kernelRef.current.getState());

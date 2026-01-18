@@ -14,56 +14,7 @@
  */
 
 import * as Tone from 'tone';
-
-export type SoundscapeName = 'none' | 'forest' | 'ocean' | 'rain' | 'fireplace';
-
-type SoundscapeLayer = {
-  name: string;
-  file: string;
-  baseGain: number;
-  inhaleGain?: number;  // Optional override during inhale
-  exhaleGain?: number;  // Optional override during exhale
-};
-
-type SoundscapeConfig = {
-  name: SoundscapeName;
-  layers: SoundscapeLayer[];
-};
-
-const SOUNDSCAPE_CONFIGS: Record<Exclude<SoundscapeName, 'none'>, SoundscapeConfig> = {
-  forest: {
-    name: 'forest',
-    layers: [
-      { name: 'birds', file: '/audio/soundscapes/forest/birds.mp3', baseGain: 0.3, inhaleGain: 0.45, exhaleGain: 0.15 },
-      { name: 'wind', file: '/audio/soundscapes/forest/wind.mp3', baseGain: 0.5, inhaleGain: 0.6, exhaleGain: 0.3 },
-      { name: 'creek', file: '/audio/soundscapes/forest/creek.mp3', baseGain: 0.4, inhaleGain: 0.3, exhaleGain: 0.5 },
-      { name: 'crickets', file: '/audio/soundscapes/forest/crickets.mp3', baseGain: 0.2, inhaleGain: 0.15, exhaleGain: 0.25 }
-    ]
-  },
-  ocean: {
-    name: 'ocean',
-    layers: [
-      { name: 'waves', file: '/audio/soundscapes/ocean/waves.mp3', baseGain: 0.6, inhaleGain: 0.5, exhaleGain: 0.7 },
-      { name: 'seagulls', file: '/audio/soundscapes/ocean/seagulls.mp3', baseGain: 0.15, inhaleGain: 0.25, exhaleGain: 0.1 },
-      { name: 'wind', file: '/audio/soundscapes/ocean/wind.mp3', baseGain: 0.35, inhaleGain: 0.45, exhaleGain: 0.25 }
-    ]
-  },
-  rain: {
-    name: 'rain',
-    layers: [
-      { name: 'rain-light', file: '/audio/soundscapes/rain/rain-light.mp3', baseGain: 0.5, inhaleGain: 0.4, exhaleGain: 0.6 },
-      { name: 'rain-heavy', file: '/audio/soundscapes/rain/rain-heavy.mp3', baseGain: 0.3, inhaleGain: 0.25, exhaleGain: 0.35 },
-      { name: 'thunder', file: '/audio/soundscapes/rain/thunder.mp3', baseGain: 0.15, inhaleGain: 0.1, exhaleGain: 0.2 }
-    ]
-  },
-  fireplace: {
-    name: 'fireplace',
-    layers: [
-      { name: 'crackle', file: '/audio/soundscapes/fireplace/crackle.mp3', baseGain: 0.45, inhaleGain: 0.4, exhaleGain: 0.5 },
-      { name: 'ambient', file: '/audio/soundscapes/fireplace/ambient.mp3', baseGain: 0.5, inhaleGain: 0.5, exhaleGain: 0.5 }
-    ]
-  }
-};
+import { SOUNDSCAPE_CONFIGS, SoundscapeLayer, SoundscapeName } from './audioAssets';
 
 export class SoundscapeEngine {
   private currentSoundscape: SoundscapeName = 'none';
@@ -83,6 +34,7 @@ export class SoundscapeEngine {
    * Connect soundscape engine to audio destination
    */
   connect(destination: Tone.ToneAudioNode) {
+    this.masterGain.disconnect();
     this.masterGain.connect(destination);
   }
 

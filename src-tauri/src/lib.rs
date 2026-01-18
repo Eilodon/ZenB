@@ -4,6 +4,7 @@ mod commands;
 
 use std::sync::Mutex;
 use commands::RuntimeState;
+use tauri::Manager;
 use zenone_ffi::ZenOneRuntime;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -38,6 +39,10 @@ pub fn run() {
                         .level(log::LevelFilter::Info)
                         .build(),
                 )?;
+                // Open DevTools in debug mode
+                if let Some(window) = app.get_webview_window("main") {
+                    window.open_devtools();
+                }
             }
             Ok(())
         })

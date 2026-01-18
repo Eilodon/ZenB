@@ -1,7 +1,9 @@
 
 import * as Tone from 'tone';
 import { SoundPack, CueType, Language } from '../types';
+import { REAL_ZEN_SAMPLE_URLS, SOUND_PACK_ENGINES } from './audioAssets';
 import { SAFE_SYNTHESIS_PRESETS } from './audio-synthesis-safe';
+import { soundscapeEngine } from './SoundscapeEngine';
 
 // ============================================================================
 // PROFESSIONAL ZEN AUDIO ENGINE V2.2 (With Scheduling)
@@ -23,6 +25,11 @@ let isInitializing = false;
 
 // Master processing chain
 let masterBus: Tone.Channel | null = null;
+let cueBus: Tone.Channel | null = null;
+let ambienceBus: Tone.Channel | null = null;
+let voiceBus: Tone.Channel | null = null;
+let cueDucker: Tone.Gain | null = null;
+let ambienceDucker: Tone.Gain | null = null;
 let spatializer: Tone.StereoWidener | null = null;
 let panner3D: Tone.Panner3D | null = null; // [NEW] Spatial Audio
 let masterEQ: Tone.EQ3 | null = null;
@@ -30,7 +37,6 @@ let warmth: Tone.Distortion | null = null;
 let compressor: Tone.Compressor | null = null;
 let reverb: Tone.Reverb | null = null;
 let limiter: Tone.Limiter | null = null;
-let duckingGain: Tone.Gain | null = null;
 
 // Instrument layers
 type SynthLayers = {
@@ -90,6 +96,14 @@ type SampleBank = {
     ambience?: Tone.Player;
 };
 let sampleBank: SampleBank | null = null;
+let sampleBankLoadPromise: Promise<SampleBank | null> | null = null;
+let sampleBankLoadFailed = false;
+let sampleBankGeneration = 0;
+const playerBaseVolumeDb = new WeakMap<Tone.Player, number>();
+const playerSourceUrl = new WeakMap<Tone.Player, string>();
+const preloadedPacks = new Set<SoundPack>();
+let preloadScheduled = false;
+const fallbackNotified = new Set<SoundPack>();
 
 let lastCueKey = '';
 let lastCueTime = 0;
@@ -103,13 +117,18 @@ type DeviceAudioProfile = {
   reverb: { decay: number; wet: number };
   compression: { threshold: number; ratio: number };
   spatializer: number;
+  processing: { enableReverb: boolean; enableSpatial: boolean; enableWarmth: boolean };
+  lookAhead: number;
   description: string;
 };
 
 function getDeviceAudioProfile(): DeviceAudioProfile {
-  const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
-  const isLowEnd = navigator.hardwareConcurrency < 4;
-  const cores = navigator.hardwareConcurrency || 4;
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+  const cores = typeof navigator !== 'undefined' && typeof navigator.hardwareConcurrency === 'number'
+    ? navigator.hardwareConcurrency
+    : 4;
+  const isMobile = /iPhone|iPad|Android/i.test(ua);
+  const isLowEnd = cores < 4;
 
   // Low-end mobile: Boost presence, reduce bass (weak speakers)
   if (isMobile && isLowEnd) {
@@ -118,6 +137,8 @@ function getDeviceAudioProfile(): DeviceAudioProfile {
       reverb: { decay: 2.0, wet: 0.15 },   // Lighter reverb
       compression: { threshold: -15, ratio: 3.5 },  // More compression
       spatializer: 0.25,                   // Reduced spatial width
+      processing: { enableReverb: false, enableSpatial: false, enableWarmth: false },
+      lookAhead: 0.1,
       description: 'Mobile Low-End (< 4 cores)'
     };
   }
@@ -129,6 +150,8 @@ function getDeviceAudioProfile(): DeviceAudioProfile {
       reverb: { decay: 2.8, wet: 0.22 },
       compression: { threshold: -16, ratio: 2.8 },
       spatializer: 0.30,
+      processing: { enableReverb: true, enableSpatial: true, enableWarmth: true },
+      lookAhead: 0.07,
       description: `Mobile Standard (${cores} cores)`
     };
   }
@@ -139,6 +162,8 @@ function getDeviceAudioProfile(): DeviceAudioProfile {
     reverb: { decay: 3.2, wet: 0.28 },
     compression: { threshold: -18, ratio: 2.5 },
     spatializer: 0.35,
+    processing: { enableReverb: true, enableSpatial: true, enableWarmth: true },
+    lookAhead: 0.05,
     description: `Desktop (${cores} cores)`
   };
 }
@@ -173,6 +198,20 @@ function randomPick<T>(arr: T[]): T {
     return arr[Math.floor(Math.random() * arr.length)];
 }
 
+function connectChain(nodes: Array<Tone.ToneAudioNode | null>): void {
+    const active = nodes.filter(Boolean) as Tone.ToneAudioNode[];
+    for (let i = 0; i < active.length - 1; i++) {
+        active[i].connect(active[i + 1]);
+    }
+}
+
+function notifyAudioFallback(pack: SoundPack, reason: string): void {
+    if (fallbackNotified.has(pack)) return;
+    fallbackNotified.add(pack);
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(new CustomEvent('zen:audio:fallback', { detail: { pack, reason } }));
+}
+
 // ============================================================================
 // MASTER PROCESSING CHAIN
 // ============================================================================
@@ -184,17 +223,17 @@ function buildMasterChain(): void {
     const audioProfile = getDeviceAudioProfile();
     console.log(`🎵 Audio Profile: ${audioProfile.description}`);
 
-    masterBus = new Tone.Channel({ volume: -6 });
-    spatializer = new Tone.StereoWidener(audioProfile.spatializer);
+    try {
+        Tone.getContext().lookAhead = audioProfile.lookAhead;
+    } catch { }
 
-    // [NEW] 3D Panner for breathing expansion/contraction illusion
-    panner3D = new Tone.Panner3D({
-        panningModel: 'HRTF',
-        positionX: 0,
-        positionY: 0,
-        positionZ: 0,
-        rolloffFactor: 1.5
-    });
+    masterBus = new Tone.Channel({ volume: -6 });
+    cueBus = new Tone.Channel({ volume: 0 });
+    ambienceBus = new Tone.Channel({ volume: -6 });
+    voiceBus = new Tone.Channel({ volume: 0 });
+
+    cueDucker = new Tone.Gain(1.0);
+    ambienceDucker = new Tone.Gain(1.0);
 
     masterEQ = new Tone.EQ3({
         low: audioProfile.eq.low,
@@ -203,7 +242,7 @@ function buildMasterChain(): void {
         lowFrequency: 200,
         highFrequency: 5000
     });
-    warmth = new Tone.Distortion(SAFE_SYNTHESIS_PRESETS.warmth);
+    warmth = audioProfile.processing.enableWarmth ? new Tone.Distortion(SAFE_SYNTHESIS_PRESETS.warmth) : null;
     compressor = new Tone.Compressor({
         threshold: audioProfile.compression.threshold,
         ratio: audioProfile.compression.ratio,
@@ -211,35 +250,64 @@ function buildMasterChain(): void {
         release: 0.35,
         knee: 10
     });
-    reverb = new Tone.Reverb({
+    reverb = audioProfile.processing.enableReverb ? new Tone.Reverb({
         decay: audioProfile.reverb.decay,
         preDelay: 0.015,
         wet: audioProfile.reverb.wet
-    });
-    limiter = new Tone.Limiter(-0.3);
-    duckingGain = new Tone.Gain(1.0);
+    }) : null;
+
+    if (audioProfile.processing.enableSpatial) {
+        spatializer = new Tone.StereoWidener(audioProfile.spatializer);
+        // [NEW] 3D Panner for breathing expansion/contraction illusion
+        panner3D = new Tone.Panner3D({
+            panningModel: 'HRTF',
+            positionX: 0,
+            positionY: 0,
+            positionZ: 0,
+            rolloffFactor: 1.5
+        });
+    }
+
+    limiter = new Tone.Limiter(-1.0);
+
+    // Route buses into master chain
+    cueBus.connect(cueDucker);
+    cueDucker.connect(masterEQ);
+    ambienceBus.connect(ambienceDucker);
+    ambienceDucker.connect(masterEQ);
+    voiceBus.connect(masterEQ);
+    soundscapeEngine.connect(ambienceBus);
 
     // Connect Chain:
-    // EQ -> Warmth -> Compressor -> Reverb -> Ducking -> Panner3D -> Spatializer -> Limiter -> Out
-    masterEQ.connect(warmth);
-    warmth.connect(compressor);
-    compressor.connect(reverb);
-    reverb.connect(duckingGain);
-    duckingGain.connect(panner3D);
-    panner3D.connect(spatializer);
-    spatializer.connect(limiter);
-    limiter.connect(masterBus);
+    // EQ -> Warmth -> Compressor -> Reverb -> Panner3D -> Spatializer -> Limiter -> Out
+    connectChain([masterEQ, warmth, compressor, reverb, panner3D, spatializer, limiter, masterBus]);
     masterBus.toDestination();
 
-    reverb.generate().catch(() => { });
+    reverb?.generate().catch(() => { });
 }
 
 export function setAiDucking(isSpeaking: boolean) {
-    if (!duckingGain) return;
+    if (!cueDucker || !ambienceDucker) return;
     const now = Tone.now();
-    const targetGain = isSpeaking ? 0.25 : 1.0;
-    duckingGain.gain.cancelScheduledValues(now);
-    duckingGain.gain.rampTo(targetGain, 0.5, now);
+    const cueTarget = isSpeaking ? 0.65 : 1.0;
+    const ambienceTarget = isSpeaking ? 0.22 : 1.0;
+
+    cueDucker.gain.cancelScheduledValues(now);
+    ambienceDucker.gain.cancelScheduledValues(now);
+    cueDucker.gain.rampTo(cueTarget, 0.45, now);
+    ambienceDucker.gain.rampTo(ambienceTarget, 0.45, now);
+}
+
+function setVoiceDucking(isSpeaking: boolean) {
+    if (!cueDucker || !ambienceDucker) return;
+    const now = Tone.now();
+    const cueTarget = isSpeaking ? 0.8 : 1.0;
+    const ambienceTarget = isSpeaking ? 0.35 : 1.0;
+
+    cueDucker.gain.cancelScheduledValues(now);
+    ambienceDucker.gain.cancelScheduledValues(now);
+    cueDucker.gain.rampTo(cueTarget, 0.2, now);
+    ambienceDucker.gain.rampTo(ambienceTarget, 0.2, now);
 }
 
 /**
@@ -307,10 +375,10 @@ function buildSynthLayers(): SynthLayers {
     });
     texture.volume.value = -22;
 
-    sub.connect(masterEQ!);
-    body.connect(masterEQ!);
-    air.connect(masterEQ!);
-    texture.connect(masterEQ!);
+    sub.connect(cueBus!);
+    body.connect(cueBus!);
+    air.connect(cueBus!);
+    texture.connect(cueBus!);
 
     return { sub, body, air, texture };
 }
@@ -349,7 +417,7 @@ function buildBreathEngine(): BreathEngine {
     brown.connect(formant3); formant3.connect(highpass); highpass.connect(brownGain);
 
     whiteGain.connect(mixGain); pinkGain.connect(mixGain); brownGain.connect(mixGain);
-    mixGain.connect(masterEQ!);
+    mixGain.connect(cueBus!);
 
     white.start(); pink.start(); brown.start();
 
@@ -378,7 +446,7 @@ function createSingingBowl(): SingingBowl {
     shimmer.start();
 
     synth.connect(gain);
-    gain.connect(masterEQ!);
+    gain.connect(cueBus!);
 
     return { synth, vibrato, shimmer, gain };
 }
@@ -393,7 +461,7 @@ function createCrystalBell(): CrystalBell {
     const chorus = new Tone.Chorus({ frequency: 2.5, delayTime: 3.5, depth: 0.6, wet: 0.5 });
     chorus.start();
     const gain = new Tone.Gain(1.0);
-    synth.connect(chorus); chorus.connect(gain); gain.connect(masterEQ!);
+    synth.connect(chorus); chorus.connect(gain); gain.connect(cueBus!);
     return { synth, chorus, gain };
 }
 
@@ -409,52 +477,101 @@ function buildAmbientPad(): void {
     });
     padFilter = new Tone.Filter({ type: 'lowpass', frequency: 2500, rolloff: -12, Q: 1.2 });
     padGain = new Tone.Gain(0.0);
-    ambientPad.connect(padFilter); padFilter.connect(padGain); padGain.connect(masterEQ!);
+    ambientPad.connect(padFilter); padFilter.connect(padGain); padGain.connect(cueBus!);
 }
-
-const SAMPLE_URLS = {
-    inhale: ['/audio/real-zen/inhale_01.wav', '/audio/real-zen/inhale_02.wav', '/audio/real-zen/inhale_03.wav'],
-    exhale: ['/audio/real-zen/exhale_01.wav', '/audio/real-zen/exhale_02.wav', '/audio/real-zen/exhale_03.wav'],
-    hold: ['/audio/real-zen/hold_01.wav', '/audio/real-zen/hold_02.wav'],
-    finish: ['/audio/real-zen/finish_01.wav'],
-    ambience: '/audio/real-zen/ambience_loop.wav'
-};
 
 async function loadSampleBank(): Promise<SampleBank | null> {
     if (sampleBank) return sampleBank;
     if (!masterEQ) buildMasterChain();
 
-    try {
-        const check = await fetch(SAMPLE_URLS.inhale[0], { method: 'HEAD' });
-        if (!check.ok) throw new Error("Samples missing");
+    if (sampleBankLoadFailed) return null;
+    if (sampleBankLoadPromise) return sampleBankLoadPromise;
 
-        const createPlayers = (urls: string[], volumeDb: number) =>
-            urls.map(url => {
-                const player = new Tone.Player({ url, autostart: false, fadeIn: 0.02, fadeOut: 0.03 });
-                player.volume.value = volumeDb;
-                player.connect(masterEQ!);
-                return player;
-            });
+    sampleBankLoadPromise = (async () => {
+        const gen = sampleBankGeneration;
+        let bank: SampleBank | null = null;
+        try {
+            const createPlayers = (urls: readonly string[], volumeDb: number) =>
+                urls.map(url => {
+                    const player = new Tone.Player({ url, autostart: false, fadeIn: 0.02, fadeOut: 0.03 });
+                    player.volume.value = volumeDb;
+                    playerBaseVolumeDb.set(player, volumeDb);
+                    playerSourceUrl.set(player, url);
+                    player.connect(cueBus!);
+                    return player;
+                });
 
-        const bank: SampleBank = {
-            inhale: createPlayers(SAMPLE_URLS.inhale, -12),
-            exhale: createPlayers(SAMPLE_URLS.exhale, -12),
-            hold: createPlayers(SAMPLE_URLS.hold, -14),
-            finish: createPlayers(SAMPLE_URLS.finish, -10)
-        };
+            bank = {
+                inhale: createPlayers(REAL_ZEN_SAMPLE_URLS.inhale, -12),
+                exhale: createPlayers(REAL_ZEN_SAMPLE_URLS.exhale, -12),
+                hold: createPlayers(REAL_ZEN_SAMPLE_URLS.hold, -14),
+                finish: createPlayers(REAL_ZEN_SAMPLE_URLS.finish, -10)
+            };
 
-        if (SAMPLE_URLS.ambience) {
-            const ambience = new Tone.Player({ url: SAMPLE_URLS.ambience, loop: true, autostart: false, fadeIn: 1.2, fadeOut: 1.5 });
-            ambience.volume.value = -32;
-            ambience.connect(masterEQ!);
-            bank.ambience = ambience;
+            if (REAL_ZEN_SAMPLE_URLS.ambience) {
+                const ambience = new Tone.Player({ url: REAL_ZEN_SAMPLE_URLS.ambience, loop: true, autostart: false, fadeIn: 1.2, fadeOut: 1.5 });
+                ambience.volume.value = -32;
+                playerBaseVolumeDb.set(ambience, -32);
+                playerSourceUrl.set(ambience, REAL_ZEN_SAMPLE_URLS.ambience);
+                ambience.connect(ambienceBus!);
+                bank.ambience = ambience;
+            }
+
+            // Preload buffers so first cue doesn't stutter/silence.
+            const allPlayers = [...bank.inhale, ...bank.exhale, ...bank.hold, ...bank.finish, ...(bank.ambience ? [bank.ambience] : [])];
+            await Promise.all(allPlayers.map(p => {
+                const url = playerSourceUrl.get(p);
+                if (!url) throw new Error('Missing sample URL for player');
+                return p.load(url);
+            }));
+
+            // If the audio engine was cleaned up while loading, drop the result.
+            if (gen !== sampleBankGeneration) {
+                [...bank.inhale, ...bank.exhale, ...bank.hold, ...bank.finish].forEach(safeDispose);
+                safeDispose(bank.ambience);
+                return null;
+            }
+
+            sampleBank = bank;
+            return bank;
+        } catch (error) {
+            console.warn('Sample loading failed, will use synthesis fallback:', error);
+            if (gen === sampleBankGeneration) sampleBankLoadFailed = true;
+            notifyAudioFallback('real-zen', 'sample_load_failed');
+            if (bank) {
+                [...bank.inhale, ...bank.exhale, ...bank.hold, ...bank.finish].forEach(safeDispose);
+                safeDispose(bank.ambience);
+            }
+            sampleBank = null;
+            return null;
+        } finally {
+            sampleBankLoadPromise = null;
         }
-        sampleBank = bank;
-        return bank;
-    } catch (error) {
-        console.warn('Sample loading failed, will use synthesis fallback:', error);
-        return null;
+    })();
+
+    return sampleBankLoadPromise;
+}
+
+export function scheduleAudioPreload(pack: SoundPack): void {
+    if (pack !== 'real-zen') return;
+    if (sampleBankLoadFailed || preloadedPacks.has(pack) || preloadScheduled) return;
+
+    preloadScheduled = true;
+    const run = () => {
+        preloadScheduled = false;
+        void loadSampleBank().then((bank) => {
+            if (bank) preloadedPacks.add(pack);
+        });
+    };
+
+    if (typeof window !== 'undefined') {
+        const ric = (window as any).requestIdleCallback as ((cb: () => void, opts?: { timeout: number }) => void) | undefined;
+        if (typeof ric === 'function') {
+            ric(run, { timeout: 1500 });
+            return;
+        }
     }
+    setTimeout(run, 300);
 }
 
 async function initializeAudioSystem(): Promise<void> {
@@ -512,9 +629,13 @@ function speakCue(text: string, lang: Language): void {
         utterance.rate = lang === 'vi' ? 0.88 : 0.92;
         utterance.pitch = 0.95;
         utterance.volume = 0.85;
+        utterance.onstart = () => setVoiceDucking(true);
+        utterance.onend = () => setVoiceDucking(false);
+        utterance.onerror = () => setVoiceDucking(false);
         window.speechSynthesis.cancel();
         window.speechSynthesis.speak(utterance);
     } catch (error) {
+        setVoiceDucking(false);
         console.warn('Speech synthesis error:', error);
     }
 }
@@ -649,10 +770,13 @@ export async function playCue(
     // SCHEDULING FIX: Schedule a bit in the future to allow UI thread jitter
     const when = Tone.now() + 0.05;
 
-    if (pack.startsWith('voice')) {
+    const packMeta = SOUND_PACK_ENGINES[pack];
+    if (!packMeta) return;
+
+    if (packMeta.engine.startsWith('voice')) {
         const t = TRANSLATIONS[lang] || TRANSLATIONS.en;
         let text = '';
-        if (pack === 'voice-12') {
+        if (packMeta.engine === 'voice-12') {
             if (cue === 'inhale') text = lang === 'vi' ? 'Một' : 'One';
             else if (cue === 'exhale') text = lang === 'vi' ? 'Hai' : 'Two';
             else if (cue === 'hold') text = lang === 'vi' ? 'Giữ' : 'Hold';
@@ -668,8 +792,10 @@ export async function playCue(
 
     const dur = clamp(duration, 0.3, 15);
 
-    if (pack === 'real-zen') {
-        const bank = await loadSampleBank();
+    if (packMeta.engine === 'samples') {
+        // Start loading in the background; don't block this cue (prevents perceived lag).
+        scheduleAudioPreload(pack);
+        const bank = sampleBank;
         if (bank) {
             if (bank.ambience) {
                 try {
@@ -680,7 +806,8 @@ export async function playCue(
             const pool = cue === 'inhale' ? bank.inhale : cue === 'exhale' ? bank.exhale : cue === 'hold' ? bank.hold : bank.finish;
             if (pool && pool.length > 0) {
                 const player = randomPick(pool);
-                player.volume.value += randomRange(-1.5, 1.0);
+                const baseVol = playerBaseVolumeDb.get(player) ?? player.volume.value;
+                player.volume.value = baseVol + randomRange(-1.5, 1.0);
                 try { player.start(when); } catch { }
             }
             if (cue === 'inhale' || cue === 'exhale') playOrganicBreath(cue, dur, when);
@@ -688,12 +815,12 @@ export async function playCue(
         }
     }
 
-    if (pack === 'synth' || pack === 'real-zen') {
+    if (packMeta.engine === 'synth' || packMeta.engine === 'samples') {
         playSynthCue(cue, dur, when);
         if (cue === 'inhale' || cue === 'exhale') playOrganicBreath(cue, dur, when);
     }
 
-    if (pack === 'breath') {
+    if (packMeta.engine === 'breath') {
         if (cue === 'inhale' || cue === 'exhale') {
             playOrganicBreath(cue, dur, when);
             if (synthLayers) {
@@ -705,7 +832,7 @@ export async function playCue(
         }
     }
 
-    if (pack === 'bells') {
+    if (packMeta.engine === 'bells') {
         playSingingBowl(cue, when);
         if (bells.length > 0) {
             const bell = randomPick(bells);
@@ -718,12 +845,18 @@ export async function playCue(
 }
 
 export function cleanupAudio(): void {
+    soundscapeEngine.stop();
     try { sampleBank?.ambience?.stop(); } catch { }
     if (sampleBank) {
         [...sampleBank.inhale, ...sampleBank.exhale, ...sampleBank.hold, ...sampleBank.finish].forEach(safeDispose);
         safeDispose(sampleBank.ambience);
     }
     sampleBank = null;
+    sampleBankLoadPromise = null;
+    sampleBankGeneration += 1;
+    preloadedPacks.clear();
+    fallbackNotified.clear();
+    preloadScheduled = false;
 
     if (synthLayers) Object.values(synthLayers).forEach(safeDispose);
     synthLayers = null;
@@ -744,9 +877,13 @@ export function cleanupAudio(): void {
     safeDispose(ambientPad); safeDispose(padFilter); safeDispose(padGain);
     ambientPad = null; padFilter = null; padGain = null;
 
+    safeDispose(cueBus); safeDispose(ambienceBus); safeDispose(voiceBus);
+    safeDispose(cueDucker); safeDispose(ambienceDucker);
     safeDispose(spatializer); safeDispose(masterEQ); safeDispose(warmth);
-    safeDispose(compressor); safeDispose(reverb); safeDispose(limiter); safeDispose(duckingGain); safeDispose(masterBus); safeDispose(panner3D);
-    masterBus = null; spatializer = null; masterEQ = null; warmth = null; compressor = null; reverb = null; limiter = null; duckingGain = null; panner3D = null;
+    safeDispose(compressor); safeDispose(reverb); safeDispose(limiter); safeDispose(masterBus); safeDispose(panner3D);
+    masterBus = null; cueBus = null; ambienceBus = null; voiceBus = null;
+    cueDucker = null; ambienceDucker = null;
+    spatializer = null; masterEQ = null; warmth = null; compressor = null; reverb = null; limiter = null; panner3D = null;
 
     if (typeof window !== 'undefined' && window.speechSynthesis) try { window.speechSynthesis.cancel(); } catch { }
 

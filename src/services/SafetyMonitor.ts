@@ -103,9 +103,12 @@ export const SAFETY_SPECS: LTLFormula[] = [
             operator: 'ATOMIC',
             name: 'check_tempo_rate',
             description: 'Check tempo rate of change',
-            predicate: (state, event) => {
+            predicate: (state, event, trace) => {
                 if (event?.type === 'ADJUST_TEMPO') {
-                    const dt = (event.timestamp - state.lastUpdateTimestamp) / 1000;
+                    const last = trace.slice().reverse().find(e => e.type === 'ADJUST_TEMPO') as (KernelEvent & { type: 'ADJUST_TEMPO' }) | undefined;
+                    if (!last) return true; // No prior tempo change to rate-limit against
+
+                    const dt = (event.timestamp - last.timestamp) / 1000;
                     if (dt > 0) {
                         const delta = Math.abs(event.scale - state.tempoScale);
                         const rate = delta / dt;
@@ -523,8 +526,17 @@ export class SafetyMonitor {
             // Clamp tempo to safe bounds [0.8, 1.4]
             const safeTempo = Math.max(0.8, Math.min(1.4, scale));
 
-            // Check rate constraint
-            const dt = (unsafeEvent.timestamp - state.lastUpdateTimestamp) / 1000;
+            // Check rate constraint (relative to last tempo adjustment)
+            const last = this.trace.slice().reverse().find(e => e.type === 'ADJUST_TEMPO') as (KernelEvent & { type: 'ADJUST_TEMPO' }) | undefined;
+            if (!last) {
+                return {
+                    ...unsafeEvent,
+                    scale: safeTempo,
+                    reason: `${unsafeEvent.reason} [SHIELDED: ${violatedSpec.name}]`
+                };
+            }
+
+            const dt = (unsafeEvent.timestamp - last.timestamp) / 1000;
             if (dt > 0) {
                 const maxDelta = 0.1 * dt;
                 const clampedTempo = Math.max(

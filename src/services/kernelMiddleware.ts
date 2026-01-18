@@ -12,6 +12,22 @@ export type Middleware = (
   api: { queue: (cmd: KernelEvent) => void }
 ) => void;
 
+let lastSensorySyncKey = '';
+
+function syncSensorySettings(): { soundEnabled: boolean } {
+  const settings = useSettingsStore.getState().userSettings;
+  const key = `${settings.soundPack}|${settings.hapticEnabled ? 1 : 0}|${settings.soundEnabled ? 1 : 0}`;
+  if (key !== lastSensorySyncKey) {
+    lastSensorySyncKey = key;
+    sensory.updateSettings({
+      soundPack: settings.soundPack,
+      hapticsEnabled: settings.hapticEnabled,
+      muted: !settings.soundEnabled
+    });
+  }
+  return { soundEnabled: settings.soundEnabled };
+}
+
 /**
  * Middleware to handle audio cues on phase transitions
  */
@@ -22,9 +38,10 @@ function phaseToSensoryPhase(phase: import('../types').BreathPhase): 'inhale' | 
 }
 
 export const audioMiddleware: Middleware = (event, _before, after) => {
+  const { soundEnabled } = syncSensorySettings();
+
   if (event.type === 'PHASE_TRANSITION' && after.status === 'RUNNING') {
-    const settings = useSettingsStore.getState().userSettings;
-    if (settings.soundEnabled) {
+    if (soundEnabled) {
       sensory.onBreathPhase(phaseToSensoryPhase(after.phase), after.phaseDuration);
     }
   }

@@ -1,4 +1,4 @@
-import { playCue, setAiDucking, unlockAudio } from '../services/audio';
+import { playCue, scheduleAudioPreload, setAiDucking, unlockAudio } from '../services/audio';
 import { hapticTick, hapticPhase } from '../services/haptics';
 import { CueType, SoundPack } from '../types';
 
@@ -21,7 +21,7 @@ let instance: SensoryCoordinator | null = null;
 
 export class SensoryCoordinator {
     private isMuted: boolean = false;
-    private soundPack: SoundPack = 'real-zen';
+    private soundPack: SoundPack = 'synth';
     private hapticsEnabled: boolean = true;
 
     constructor() {
@@ -50,6 +50,7 @@ export class SensoryCoordinator {
         this.soundPack = settings.soundPack;
         this.hapticsEnabled = settings.hapticsEnabled;
         if (settings.muted !== undefined) this.isMuted = settings.muted;
+        scheduleAudioPreload(settings.soundPack);
     }
 
     /**

@@ -7,6 +7,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { TRANSLATIONS } from '../../translations';
 import { SoundPack, BreathingType } from '../../types';
 import { SOUND_PACK_LIST } from '../../services/audioAssets';
+import { scheduleAudioPreload } from '../../services/audio';
 import { hapticTick } from '../../services/haptics';
 import { CameraPermissionModal } from '../modals/CameraPermissionModal';
 import { GestureBottomSheet } from '../../design-system';
@@ -233,6 +234,10 @@ function SoundSettingsSection({
     if (userSettings.soundEnabled && !expanded) setExpanded(true);
   }, [userSettings.soundEnabled, expanded]);
 
+  useEffect(() => {
+    if (userSettings.soundEnabled) scheduleAudioPreload(userSettings.soundPack);
+  }, [userSettings.soundEnabled, userSettings.soundPack]);
+
   // Close dropdown when collapsing / disabling sound.
   useEffect(() => {
     if (!expanded || !userSettings.soundEnabled) setPackOpen(false);
@@ -344,6 +349,7 @@ function SoundSettingsSection({
                         if (disabled) return;
                         triggerHaptic();
                         setSoundPack(pack);
+                        scheduleAudioPreload(pack);
                         setPackOpen(false);
                       }}
                       className={clsx(
@@ -406,6 +412,27 @@ function WearableSection({ triggerHaptic }: { triggerHaptic: () => void }) {
 
   const [expanded, setExpanded] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [showTips, setShowTips] = useState(false);
+
+  // Connection tips based on error state
+  const getConnectionTips = () => {
+    if (!error) return null;
+    const tips = [
+      '• Ensure your device is powered on and in range',
+      '• Check that Bluetooth is enabled on your phone/computer',
+      '• Try turning your wearable off and on again',
+      '• Make sure the device is not connected to another app',
+    ];
+    if (error.includes('cancelled') || error.includes('cancel')) {
+      return ['• You cancelled the connection. Tap Connect to try again.'];
+    }
+    if (error.includes('permission') || error.includes('Permission')) {
+      return ['• Grant Bluetooth permission in your browser settings', '• Try refreshing the page after granting permission'];
+    }
+    return tips;
+  };
+
+  const connectionTips = getConnectionTips();
 
   const handleProviderSelect = async (p: WearableProvider) => {
     triggerHaptic();
@@ -514,6 +541,36 @@ function WearableSection({ triggerHaptic }: { triggerHaptic: () => void }) {
 
           {error && (
             <div className="mt-3 text-xs text-red-400 bg-red-500/10 p-2 rounded-lg">{error}</div>
+          )}
+
+          {/* Scanning Animation */}
+          {isLoading && provider !== 'none' && (
+            <div className="mt-4 flex flex-col items-center gap-3 py-4">
+              <div className="relative w-20 h-20">
+                <div className="absolute inset-0 rounded-full border-2 border-blue-400/30 animate-ping" style={{ animationDuration: '2s' }} />
+                <div className="absolute inset-2 rounded-full border-2 border-blue-400/40 animate-ping" style={{ animationDuration: '2s', animationDelay: '0.3s' }} />
+                <div className="absolute inset-4 rounded-full border-2 border-blue-400/50 animate-ping" style={{ animationDuration: '2s', animationDelay: '0.6s' }} />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-4 h-4 rounded-full bg-blue-400 animate-pulse" />
+                </div>
+              </div>
+              <span className="text-xs text-white/50">Searching for devices...</span>
+              <span className="text-[10px] text-white/30">Make sure your device is nearby</span>
+            </div>
+          )}
+
+          {/* Connection Tips */}
+          {error && connectionTips && connectionTips.length > 0 && (
+            <div className="mt-2">
+              <button onClick={() => { triggerHaptic(); setShowTips(!showTips); }} className="text-[10px] text-white/40 hover:text-white/60 underline">
+                {showTips ? 'Hide tips' : 'Show troubleshooting tips'}
+              </button>
+              {showTips && (
+                <div className="mt-2 p-3 bg-white/5 rounded-lg space-y-1 text-[10px] text-white/50">
+                  {connectionTips.map((tip, i) => <div key={i}>{tip}</div>)}
+                </div>
+              )}
+            </div>
           )}
 
           {isBle && !isAvailable && (

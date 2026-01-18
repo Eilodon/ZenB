@@ -9,6 +9,7 @@ vi.mock('tone', () => {
 
   return {
     now: () => 100,
+    getContext: () => ({ lookAhead: 0 }),
     Panner3D: vi.fn(() => ({
       connect: vi.fn(),
       disconnect: vi.fn(),
@@ -24,6 +25,7 @@ vi.mock('tone', () => {
         cancelScheduledValues
       },
       connect: vi.fn(),
+      disconnect: vi.fn(),
       dispose: vi.fn()
     })),
     // Add other needed mocks as stubs

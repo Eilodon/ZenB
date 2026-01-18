@@ -8,7 +8,18 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// https://tauri.app/v1/guides/getting-started/setup/vite
 export default defineConfig({
+  // Tauri expects a fixed port, fail if that port is not available
+  server: {
+    port: 5173,
+    strictPort: true,
+    host: true, // listen on all addresses
+  },
+  // prevent vite from obscuring rust errors
+  clearScreen: false,
+  // Env variables starting with TAURI_ are passed to Rust backend  
+  envPrefix: ['VITE_', 'TAURI_'],
   resolve: {
     alias: {
       '@/src': path.resolve(__dirname, 'src'),
@@ -21,6 +32,14 @@ export default defineConfig({
   },
   optimizeDeps: {
     exclude: []
+  },
+  build: {
+    // Tauri supports es2021
+    target: process.env.TAURI_PLATFORM == 'windows' ? 'chrome105' : 'safari14',
+    // don't minify for debug builds
+    minify: !process.env.TAURI_DEBUG ? 'esbuild' : false,
+    // produce sourcemaps for debug builds
+    sourcemap: !!process.env.TAURI_DEBUG,
   },
   plugins: [
     react(),

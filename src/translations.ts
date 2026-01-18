@@ -45,6 +45,7 @@ export const TRANSLATIONS = {
       dayStreak: 'Day Streak',
       offline: 'Offline mode. Some features are disabled.',
       online: 'Back online.',
+      audioFallback: 'Audio pack missing: {pack}. Falling back to Zen Synth.',
     },
     history: {
       title: 'Journal',
@@ -66,7 +67,7 @@ export const TRANSLATIONS = {
       reduceMotion: 'Reduce Motion',
       showTimer: 'Show Progress',
       language: 'Language',
-      soundPack: 'Soundscape',
+      soundPack: 'Sound Pack',
       quality: {
         auto: 'Auto',
         low: 'Eco',
@@ -186,6 +187,7 @@ export const TRANSLATIONS = {
       dayStreak: 'Ngày liên tục',
       offline: 'Đang offline. Một số tính năng sẽ bị tắt.',
       online: 'Đã kết nối lại.',
+      audioFallback: 'Thiếu gói âm: {pack}. Đã chuyển sang Zen Synth.',
     },
     history: {
       title: 'Hành trình',
@@ -207,7 +209,7 @@ export const TRANSLATIONS = {
       reduceMotion: 'Giảm chuyển động',
       showTimer: 'Vòng tiến độ',
       language: 'Ngôn ngữ',
-      soundPack: 'Âm dẫn',
+      soundPack: 'Gói âm',
       quality: {
         auto: 'Tự động',
         low: 'Tiết kiệm',
