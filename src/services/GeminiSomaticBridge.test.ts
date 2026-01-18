@@ -70,6 +70,9 @@ describe('GeminiSomaticBridge (Cortex Interface)', () => {
     vi.stubGlobal('window', { AudioContext: vi.fn(() => mockAudioContext) });
     vi.stubGlobal('btoa', (str: string) => (globalThis as any).Buffer.from(str).toString('base64'));
 
+    // Mock performance.now for monotonic clock rate limits (starts at 10000ms to pass 5s check)
+    vi.stubGlobal('performance', { now: vi.fn(() => 10000) });
+
     process.env.API_KEY = 'test-key';
 
     // Setup Kernel

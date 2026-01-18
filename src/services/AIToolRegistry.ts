@@ -63,7 +63,11 @@ export interface ToolContext {
   userConfirmed?: boolean;
   previousTempo?: number;
   previousPattern?: string;
+  currentArousal: number;  // NEW: For safety checks
 }
+
+// Monotonic clock helper - prevents clock manipulation bypass
+const now = () => performance.now();
 
 // --- VALIDATION HELPER ---
 
@@ -126,8 +130,8 @@ export const AI_TOOLS: Record<string, ToolDefinition> = {
     },
 
     canExecute: (args, context) => {
-      // Rate limit: Max 1 adjustment per 5 seconds
-      const timeSinceLastAdjust = Date.now() - context.lastTempoChange;
+      // Rate limit: Max 1 adjustment per 5 seconds (monotonic clock)
+      const timeSinceLastAdjust = now() - context.lastTempoChange;
       if (timeSinceLastAdjust < 5000) {
         return {
           allowed: false,
@@ -194,8 +198,8 @@ export const AI_TOOLS: Record<string, ToolDefinition> = {
         };
       }
 
-      // Rate limit: Max 1 pattern switch per 30 seconds
-      const timeSinceLastSwitch = Date.now() - context.lastPatternChange;
+      // Rate limit: Max 1 pattern switch per 30 seconds (monotonic clock)
+      const timeSinceLastSwitch = now() - context.lastPatternChange;
       if (timeSinceLastSwitch < 30000) {
         return {
           allowed: false,
@@ -203,8 +207,16 @@ export const AI_TOOLS: Record<string, ToolDefinition> = {
         };
       }
 
-      // Require user confirmation for high-arousal patterns
+      // SAFETY: Block high-arousal patterns when user is stressed
       const pattern = BREATHING_PATTERNS[args.patternId as BreathingType];
+      if (pattern && pattern.arousalImpact > 0.5 && context.currentArousal > 0.7) {
+        return {
+          allowed: false,
+          reason: `Cannot switch to high-arousal pattern "${args.patternId}" while user is stressed (arousal: ${context.currentArousal.toFixed(2)})`
+        };
+      }
+
+      // Require user confirmation for high-arousal patterns (pattern already defined above)
       if (pattern && pattern.arousalImpact > 0.5 && !context.userConfirmed) {
         return {
           allowed: false,
@@ -298,7 +310,8 @@ export class ToolExecutor {
       sessionDuration: state.sessionDuration,
       userConfirmed,
       previousTempo: state.tempoScale,
-      previousPattern: state.pattern?.id
+      previousPattern: state.pattern?.id,
+      currentArousal: state.belief.arousal  // NEW: For stressed user safety check
     };
 
     // 4. Check pre-conditions
@@ -314,12 +327,12 @@ export class ToolExecutor {
     try {
       const result = await tool.execute(args, this.kernel);
 
-      // Update tracking
+      // Update tracking (monotonic clock)
       if (toolName === 'adjust_tempo') {
-        this.lastTempoChange = Date.now();
+        this.lastTempoChange = now();
       }
       if (toolName === 'switch_pattern') {
-        this.lastPatternChange = Date.now();
+        this.lastPatternChange = now();
       }
 
       return { success: true, result };

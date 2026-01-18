@@ -20,6 +20,7 @@ import { BREATHING_PATTERNS } from './types';
 import { useKernel, useKernelState } from './kernel/KernelProvider';
 import { GeminiSomaticBridge } from './services/GeminiSomaticBridge';
 import { KineticSnackbar } from './components/design-system/Primitives';
+import { ConfirmationModal } from './components/modals/ConfirmationModal';
 
 export default function App() {
   // --- SELECTORS ---
@@ -226,6 +227,7 @@ export default function App() {
 
       <HistorySheet />
       <SettingsSheet />
+      <ConfirmationModal />
 
     </div>
   );

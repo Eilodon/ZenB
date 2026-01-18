@@ -288,16 +288,57 @@ export class GeminiSomaticBridge {
           responseToAI = execResult.result;
           console.log(`[ZenB Bridge] Tool executed successfully:`, responseToAI);
         } else if (execResult.needsConfirmation) {
-          // Request user confirmation
+          // Request user confirmation via UI
           console.warn(`[ZenB Bridge] Tool requires confirmation:`, execResult.error);
-          responseToAI = {
-            status: 'pending_confirmation',
-            message: execResult.error,
-            instruction: 'Please ask the user to confirm this action explicitly before proceeding.'
-          };
 
-          // TODO: Show UI confirmation dialog
-          // this.toolExecutor.requestConfirmation(fc.name, fc.args, (confirmed) => { ... });
+          // Import uiStore dynamically to show confirmation modal
+          const { useUIStore } = await import('../stores/uiStore');
+          const confirmId = `${fc.name}_${Date.now()}`;
+
+          // Show confirmation modal
+          useUIStore.getState().showConfirmation(
+            confirmId,
+            fc.name,
+            fc.args || {},
+            execResult.error || 'This action requires your confirmation.'
+          );
+
+          // Wait for user response via custom event
+          const userResponse = await new Promise<boolean>((resolve) => {
+            const handler = (e: Event) => {
+              const detail = (e as CustomEvent).detail;
+              if (detail.confirmId === confirmId) {
+                window.removeEventListener('zenb-confirmation', handler);
+                resolve(detail.confirmed);
+              }
+            };
+            window.addEventListener('zenb-confirmation', handler);
+
+            // Timeout after 30 seconds - default to deny
+            setTimeout(() => {
+              window.removeEventListener('zenb-confirmation', handler);
+              useUIStore.getState().dismissConfirmation();
+              resolve(false);
+            }, 30000);
+          });
+
+          if (userResponse) {
+            // User confirmed - retry with confirmation flag
+            const retryResult = await this.toolExecutor.execute(fc.name, fc.args || {}, true);
+            if (retryResult.success) {
+              responseToAI = retryResult.result;
+              console.log(`[ZenB Bridge] Tool executed after confirmation:`, responseToAI);
+            } else {
+              responseToAI = { status: 'failed', error: retryResult.error };
+            }
+          } else {
+            // User denied
+            responseToAI = {
+              status: 'denied_by_user',
+              message: 'User declined this action.',
+              instruction: 'Acknowledge the user\'s decision and continue the session without this change.'
+            };
+          }
         } else {
           // Execution failed (safety violation, rate limit, etc.)
           console.error(`[ZenB Bridge] Tool execution failed:`, execResult.error);
