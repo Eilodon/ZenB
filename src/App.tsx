@@ -80,13 +80,19 @@ export default function App() {
   useEffect(() => {
     const showSnackbar = useUIStore.getState().showSnackbar;
     const handleFallback = (event: Event) => {
-      const detail = (event as CustomEvent).detail as { pack?: string };
+      const detail = (event as CustomEvent).detail as { pack?: string; reason?: string };
       const packId = detail?.pack;
       const packLabel = packId && packId in t.settings.soundPacks
         ? t.settings.soundPacks[packId as keyof typeof t.settings.soundPacks]
         : (packId || t.settings.sounds);
       const message = t.ui.audioFallback.replace('{pack}', packLabel);
       showSnackbar(message, 'warn');
+
+      // Keep label → audio behavior consistent: if a pack fails, switch settings to a safe fallback.
+      if (packId === 'real-zen') {
+        const { userSettings, setSoundPack } = useSettingsStore.getState();
+        if (userSettings.soundPack === 'real-zen') setSoundPack('synth');
+      }
     };
     window.addEventListener('zen:audio:fallback', handleFallback);
     return () => window.removeEventListener('zen:audio:fallback', handleFallback);

@@ -2,6 +2,11 @@
 * {
   box-sizing: border-box;
 }
+:root {
+  --ui-pad-x: 24px;
+  --ui-pad-y: 24px;
+  --ui-max-width: 560px;
+}
 body {
   margin: 0;
   padding: 0;

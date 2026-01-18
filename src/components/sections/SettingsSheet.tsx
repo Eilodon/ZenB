@@ -252,7 +252,9 @@ function SoundSettingsSection({
         const res = await fetch('/audio/real-zen/inhale_01.wav', { method: 'HEAD' });
         if (!cancelled) setRealZenAvailable(res.ok);
       } catch {
-        if (!cancelled) setRealZenAvailable(false);
+        if (cancelled) return;
+        const offline = typeof navigator !== 'undefined' && 'onLine' in navigator && navigator.onLine === false;
+        setRealZenAvailable(offline ? null : false);
       }
     };
 

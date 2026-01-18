@@ -166,7 +166,7 @@ export function ActiveSessionDisplay() {
 
             {/* AI SOMATIC FEEDBACK (LiveResultCard) */}
             {isAiActive && !isPaused && (
-                <div className="absolute top-[12%] w-full flex justify-center px-6 pointer-events-auto">
+                <div className="absolute top-[12%] w-full flex justify-center px-[var(--ui-pad-x)] pointer-events-auto">
                     <div className="animate-in fade-in slide-in-from-top-4 duration-700 w-full max-w-xs">
                         <LiveResultCard
                             title="Neuro-Somatic Coach"
@@ -180,7 +180,7 @@ export function ActiveSessionDisplay() {
 
             {/* COACHING MESSAGES */}
             {coachingMessage && !isPaused && (
-                <div className="absolute top-[45%] w-full flex justify-center px-6 pointer-events-none">
+                <div className="absolute top-[45%] w-full flex justify-center px-[var(--ui-pad-x)] pointer-events-none">
                     <div className="animate-in fade-in slide-in-from-bottom-3 duration-500 w-full max-w-md">
                         <div className="px-6 py-4 rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.08] to-white/[0.02] backdrop-blur-xl shadow-2xl">
                             <div className="flex items-center gap-3">
@@ -230,36 +230,38 @@ export function ActiveSessionDisplay() {
 
             {/* Bio-Metrics HUD */}
             {userSettings.cameraVitalsEnabled && vitals.confidence > 0.4 && !isPaused && (
-                <div className="absolute bottom-[15%] text-center animate-in fade-in slide-in-from-bottom-4 duration-1000 w-full px-8 flex justify-between items-end max-w-sm">
+                <div className="absolute bottom-[15%] w-full flex justify-center px-[var(--ui-pad-x)] text-center animate-in fade-in slide-in-from-bottom-4 duration-1000">
+                    <div className="w-full max-w-sm flex justify-between items-end">
 
-                    {/* Heart Rate */}
-                    <div className="flex flex-col items-center gap-1 p-3 rounded-xl bg-white/[0.02] border border-white/5 backdrop-blur-sm flex-1 mr-2">
-                        <div className="flex items-center gap-2 text-[9px] text-emerald-400 uppercase tracking-widest font-bold">
-                            <Activity size={10} className="animate-pulse" /> Live Vitals
+                        {/* Heart Rate */}
+                        <div className="flex flex-col items-center gap-1 p-3 rounded-xl bg-white/[0.02] border border-white/5 backdrop-blur-sm flex-1 mr-2">
+                            <div className="flex items-center gap-2 text-[9px] text-emerald-400 uppercase tracking-widest font-bold">
+                                <Activity size={10} className="animate-pulse" /> Live Vitals
+                            </div>
+                            <div className="text-3xl font-light text-white/90 font-mono tracking-tighter tabular-nums leading-none">
+                                {vitals.heartRate}
+                                <span className="text-xs text-white/30 ml-1 font-sans">BPM</span>
+                            </div>
+                            <div className="w-full bg-white/10 h-0.5 rounded-full mt-1 overflow-hidden">
+                                <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${vitals.confidence * 100}%` }} />
+                            </div>
                         </div>
-                        <div className="text-3xl font-light text-white/90 font-mono tracking-tighter tabular-nums leading-none">
-                            {vitals.heartRate}
-                            <span className="text-xs text-white/30 ml-1 font-sans">BPM</span>
+
+                        {/* Neuro-Coupling (Alignment) */}
+                        <div className="flex flex-col items-center gap-1 p-3 rounded-xl bg-white/[0.02] border border-white/5 backdrop-blur-sm flex-1 ml-2">
+                            <div className="flex items-center gap-2 text-[9px] text-blue-400 uppercase tracking-widest font-bold">
+                                <Fingerprint size={10} /> Resonance
+                            </div>
+                            <div className="text-3xl font-light text-white/90 font-mono tracking-tighter tabular-nums leading-none">
+                                {(vitals.alignment * 100).toFixed(0)}
+                                <span className="text-xs text-white/30 ml-1 font-sans">%</span>
+                            </div>
+                            <div className="w-full bg-white/10 h-0.5 rounded-full mt-1 overflow-hidden">
+                                <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${vitals.alignment * 100}%` }} />
+                            </div>
                         </div>
-                        <div className="w-full bg-white/10 h-0.5 rounded-full mt-1 overflow-hidden">
-                            <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${vitals.confidence * 100}%` }} />
-                        </div>
+
                     </div>
-
-                    {/* Neuro-Coupling (Alignment) */}
-                    <div className="flex flex-col items-center gap-1 p-3 rounded-xl bg-white/[0.02] border border-white/5 backdrop-blur-sm flex-1 ml-2">
-                        <div className="flex items-center gap-2 text-[9px] text-blue-400 uppercase tracking-widest font-bold">
-                            <Fingerprint size={10} /> Resonance
-                        </div>
-                        <div className="text-3xl font-light text-white/90 font-mono tracking-tighter tabular-nums leading-none">
-                            {(vitals.alignment * 100).toFixed(0)}
-                            <span className="text-xs text-white/30 ml-1 font-sans">%</span>
-                        </div>
-                        <div className="w-full bg-white/10 h-0.5 rounded-full mt-1 overflow-hidden">
-                            <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${vitals.alignment * 100}%` }} />
-                        </div>
-                    </div>
-
                 </div>
             )}
         </div>

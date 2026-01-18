@@ -217,8 +217,8 @@ export function Footer({ selectedPatternId, setSelectedPatternId }: FooterProps)
   }, [safetyRegistry, recommendations]);
 
   return (
-    <footer className="fixed bottom-0 inset-x-0 z-30 pb-[calc(1.5rem+env(safe-area-inset-bottom))] transition-all duration-700 ease-out pointer-events-none">
-      <div className="w-full flex flex-col justify-end pointer-events-auto">
+    <footer className="fixed bottom-0 inset-x-0 z-30 pb-[calc(var(--ui-pad-y)+env(safe-area-inset-bottom))] transition-all duration-700 ease-out pointer-events-none">
+      <div className="mx-auto w-full max-w-[var(--ui-max-width)] flex flex-col justify-end pointer-events-auto">
 
         {!isActive && (
           <div className="flex flex-col gap-8 animate-in slide-in-from-bottom-10 fade-in duration-700">
@@ -226,7 +226,7 @@ export function Footer({ selectedPatternId, setSelectedPatternId }: FooterProps)
             {/* HORIZONTAL SLIDE CARDS (Optimized) */}
             <div
               ref={scrollContainerRef}
-              className="w-full overflow-x-auto snap-x snap-mandatory scrollbar-hide px-6 pb-4 -mx-0 pt-4"
+              className="w-full overflow-x-auto snap-x snap-mandatory scrollbar-hide px-[var(--ui-pad-x)] pb-4 -mx-0 pt-4"
             >
               <div className="flex gap-5 min-w-max items-center">
                 {sortedPatterns.map(p => {
@@ -333,7 +333,7 @@ export function Footer({ selectedPatternId, setSelectedPatternId }: FooterProps)
             </div>
 
             {/* Bottom Controls Row - Glass Pills */}
-            <div className="px-6 flex items-center gap-4 h-[64px]">
+            <div className="px-[var(--ui-pad-x)] flex items-center gap-4 h-[64px]">
               {/* History */}
               <motion.button
                 onClick={() => { triggerHaptic(); setHistoryOpen(true); }}
@@ -390,7 +390,7 @@ export function Footer({ selectedPatternId, setSelectedPatternId }: FooterProps)
 
         {isActive && (
           <motion.div
-            className="px-6 grid grid-cols-2 gap-4 pb-4"
+            className="px-[var(--ui-pad-x)] grid grid-cols-2 gap-4 pb-4"
             variants={ANIMATIONS.variants.slideUp}
             initial="initial"
             animate="animate"

@@ -1,0 +1,184 @@
+{
+  "hash": "02e9dff1",
+  "configHash": "a4554446",
+  "lockfileHash": "d86f65b6",
+  "browserHash": "0c66de63",
+  "optimized": {
+    "react/jsx-dev-runtime": {
+      "src": "../../node_modules/react/jsx-dev-runtime.js",
+      "file": "react_jsx-dev-runtime.js",
+      "fileHash": "48f68357",
+      "needsInterop": true
+    },
+    "react": {
+      "src": "../../node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "32722904",
+      "needsInterop": true
+    },
+    "react-dom/client": {
+      "src": "../../node_modules/react-dom/client.js",
+      "file": "react-dom_client.js",
+      "fileHash": "d3194519",
+      "needsInterop": true
+    },
+    "zustand": {
+      "src": "../../node_modules/zustand/esm/index.mjs",
+      "file": "zustand.js",
+      "fileHash": "fdcdab87",
+      "needsInterop": false
+    },
+    "lucide-react": {
+      "src": "../../node_modules/lucide-react/dist/esm/lucide-react.js",
+      "file": "lucide-react.js",
+      "fileHash": "1a4c01cd",
+      "needsInterop": false
+    },
+    "clsx": {
+      "src": "../../node_modules/clsx/dist/clsx.mjs",
+      "file": "clsx.js",
+      "fileHash": "651b93c6",
+      "needsInterop": false
+    },
+    "@react-three/fiber": {
+      "src": "../../node_modules/@react-three/fiber/dist/react-three-fiber.esm.js",
+      "file": "@react-three_fiber.js",
+      "fileHash": "e2030b41",
+      "needsInterop": false
+    },
+    "@react-three/drei": {
+      "src": "../../node_modules/@react-three/drei/index.js",
+      "file": "@react-three_drei.js",
+      "fileHash": "04897e76",
+      "needsInterop": false
+    },
+    "@react-three/postprocessing": {
+      "src": "../../node_modules/@react-three/postprocessing/dist/index.js",
+      "file": "@react-three_postprocessing.js",
+      "fileHash": "df5bbd83",
+      "needsInterop": false
+    },
+    "three": {
+      "src": "../../node_modules/three/build/three.module.js",
+      "file": "three.js",
+      "fileHash": "f1cf5959",
+      "needsInterop": false
+    },
+    "zustand/middleware": {
+      "src": "../../node_modules/zustand/esm/middleware.mjs",
+      "file": "zustand_middleware.js",
+      "fileHash": "3637986d",
+      "needsInterop": false
+    },
+    "@google/genai": {
+      "src": "../../node_modules/@google/genai/dist/web/index.mjs",
+      "file": "@google_genai.js",
+      "fileHash": "834dea01",
+      "needsInterop": false
+    },
+    "framer-motion": {
+      "src": "../../node_modules/framer-motion/dist/es/index.mjs",
+      "file": "framer-motion.js",
+      "fileHash": "a5800f81",
+      "needsInterop": false
+    },
+    "recharts": {
+      "src": "../../node_modules/recharts/es6/index.js",
+      "file": "recharts.js",
+      "fileHash": "7703ba21",
+      "needsInterop": false
+    },
+    "tone": {
+      "src": "../../node_modules/tone/build/esm/index.js",
+      "file": "tone.js",
+      "fileHash": "c53d2ab1",
+      "needsInterop": false
+    },
+    "idb": {
+      "src": "../../node_modules/idb/build/index.js",
+      "file": "idb.js",
+      "fileHash": "803a1e12",
+      "needsInterop": false
+    },
+    "@tauri-apps/api/core": {
+      "src": "../../node_modules/@tauri-apps/api/core.js",
+      "file": "@tauri-apps_api_core.js",
+      "fileHash": "8d3ee70e",
+      "needsInterop": false
+    },
+    "@tensorflow/tfjs": {
+      "src": "../../node_modules/@tensorflow/tfjs/dist/index.js",
+      "file": "@tensorflow_tfjs.js",
+      "fileHash": "69d279fc",
+      "needsInterop": false
+    },
+    "@tensorflow-models/face-landmarks-detection": {
+      "src": "../../node_modules/@tensorflow-models/face-landmarks-detection/dist/face-landmarks-detection.esm.js",
+      "file": "@tensorflow-models_face-landmarks-detection.js",
+      "fileHash": "037d2b0f",
+      "needsInterop": false
+    },
+    "@capacitor-community/bluetooth-le": {
+      "src": "../../node_modules/@capacitor-community/bluetooth-le/dist/esm/index.js",
+      "file": "@capacitor-community_bluetooth-le.js",
+      "fileHash": "f53f171e",
+      "needsInterop": false
+    }
+  },
+  "chunks": {
+    "chunk-RWH77UYR": {
+      "file": "chunk-RWH77UYR.js"
+    },
+    "hls-AE33N3ZI": {
+      "file": "hls-AE33N3ZI.js"
+    },
+    "vision_bundle-EJYKSMNM": {
+      "file": "vision_bundle-EJYKSMNM.js"
+    },
+    "web-BTTYRCHH": {
+      "file": "web-BTTYRCHH.js"
+    },
+    "chunk-NR5QKWAJ": {
+      "file": "chunk-NR5QKWAJ.js"
+    },
+    "chunk-KDVGFZWC": {
+      "file": "chunk-KDVGFZWC.js"
+    },
+    "chunk-MYHIP5LU": {
+      "file": "chunk-MYHIP5LU.js"
+    },
+    "chunk-52O3NXKZ": {
+      "file": "chunk-52O3NXKZ.js"
+    },
+    "chunk-Q6DFBYTI": {
+      "file": "chunk-Q6DFBYTI.js"
+    },
+    "chunk-XOTU35L6": {
+      "file": "chunk-XOTU35L6.js"
+    },
+    "chunk-VJHJBREC": {
+      "file": "chunk-VJHJBREC.js"
+    },
+    "chunk-5EGFU6AF": {
+      "file": "chunk-5EGFU6AF.js"
+    },
+    "chunk-XFKHES42": {
+      "file": "chunk-XFKHES42.js"
+    },
+    "chunk-IA3MMSZV": {
+      "file": "chunk-IA3MMSZV.js"
+    },
+    "chunk-LSDLN3OR": {
+      "file": "chunk-LSDLN3OR.js"
+    },
+    "chunk-RZSASJON": {
+      "file": "chunk-RZSASJON.js"
+    },
+    "chunk-TWJRYSII": {
+      "file": "chunk-TWJRYSII.js"
+    },
+    "chunk-DC5AMYBS": {
+      "file": "chunk-DC5AMYBS.js"
+    }
+  }
+}
