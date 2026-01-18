@@ -6,11 +6,13 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { useUIStore } from '../../stores/uiStore';
 import { TRANSLATIONS } from '../../translations';
 import { SoundPack, BreathingType } from '../../types';
+import { SOUND_PACK_LIST } from '../../services/audioAssets';
 import { hapticTick } from '../../services/haptics';
 import { CameraPermissionModal } from '../modals/CameraPermissionModal';
 import { GestureBottomSheet } from '../../design-system';
 import { HolodeckOverlay } from '../HolodeckOverlay';
 import { useWearable, WEARABLE_PROVIDERS, WearableProvider } from '../../services/WearableService';
+import { VitalsDashboard } from './VitalsDashboard';
 
 // Access window.aistudio via helper
 const getAIStudio = () => (window as any).aistudio as {
@@ -48,7 +50,7 @@ export function SettingsSheet() {
   }, [isSettingsOpen]);
 
   const t = TRANSLATIONS[userSettings.language] || TRANSLATIONS.en;
-  const soundPacks: SoundPack[] = ['synth', 'breath', 'bells', 'real-zen', 'voice-full', 'voice-12'];
+  const soundPacks: SoundPack[] = SOUND_PACK_LIST;
 
   const triggerHaptic = () => { if (userSettings.hapticEnabled) hapticTick(true, 'light'); };
 
@@ -132,6 +134,9 @@ export function SettingsSheet() {
             setSoundPack={setSoundPack}
             soundPacks={soundPacks}
           />
+
+          {/* Camera Vitals Dashboard */}
+          <VitalsDashboard />
 
           <section>
             <div className="text-white/30 font-caps text-[9px] tracking-[0.2em] mb-4 flex items-center gap-2 pl-1">{t.settings.visuals}</div>
@@ -220,11 +225,49 @@ function SoundSettingsSection({
   soundPacks: SoundPack[]
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [packOpen, setPackOpen] = useState(false);
+  const [realZenAvailable, setRealZenAvailable] = useState<boolean | null>(null);
 
   // Auto-expand when enabling sound
   useEffect(() => {
     if (userSettings.soundEnabled && !expanded) setExpanded(true);
-  }, [userSettings.soundEnabled]);
+  }, [userSettings.soundEnabled, expanded]);
+
+  // Close dropdown when collapsing / disabling sound.
+  useEffect(() => {
+    if (!expanded || !userSettings.soundEnabled) setPackOpen(false);
+  }, [expanded, userSettings.soundEnabled]);
+
+  // Detect whether the local "real-zen" asset pack exists (prevents label/audio mismatches).
+  useEffect(() => {
+    let cancelled = false;
+
+    const check = async () => {
+      try {
+        const res = await fetch('/audio/real-zen/inhale_01.wav', { method: 'HEAD' });
+        if (!cancelled) setRealZenAvailable(res.ok);
+      } catch {
+        if (!cancelled) setRealZenAvailable(false);
+      }
+    };
+
+    check();
+    return () => { cancelled = true; };
+  }, []);
+
+  // If user previously selected "real-zen" but files are missing, fall back to synth.
+  useEffect(() => {
+    if (realZenAvailable === false && userSettings.soundPack === 'real-zen') {
+      useUIStore.getState().showSnackbar(
+        userSettings.language === 'vi'
+          ? 'Gói “Real Zen” chưa có file âm thanh. Đã chuyển sang “Zen Synth”.'
+          : '“Real Zen” audio files not found. Switched to “Zen Synth”.',
+        'warn'
+      );
+      setSoundPack('synth');
+      setPackOpen(false);
+    }
+  }, [realZenAvailable, userSettings.soundPack, userSettings.language, setSoundPack]);
 
   return (
     <section>
@@ -270,13 +313,62 @@ function SoundSettingsSection({
         <div className={clsx("transition-all duration-300 overflow-hidden", expanded && userSettings.soundEnabled ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0")}>
           <div className="bg-white/[0.02] rounded-[1.5rem] border border-white/5 p-5 mt-2">
             <div className="text-[9px] text-white/40 uppercase font-bold mb-4 tracking-[0.2em] flex items-center gap-2"><Music size={12} /> {t.settings.soundPack}</div>
-            <div className="grid grid-cols-1 gap-1">
-              {soundPacks.map(pack => (
-                <button key={pack} onClick={() => { triggerHaptic(); setSoundPack(pack); }} className={clsx("w-full text-left px-4 py-3.5 rounded-xl text-xs font-medium tracking-wide transition-all flex items-center justify-between group", userSettings.soundPack === pack ? "bg-white/10 text-white shadow-sm" : "text-white/40 hover:bg-white/5 hover:text-white")}>
-                  {t.settings.soundPacks[pack]}{userSettings.soundPack === pack && <Check size={14} />}
-                </button>
-              ))}
-            </div>
+            <button
+              type="button"
+              onClick={() => { triggerHaptic(); setPackOpen((v) => !v); }}
+              className="w-full p-4 bg-white/5 rounded-xl flex items-center justify-between text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+              aria-haspopup="listbox"
+              aria-expanded={packOpen}
+            >
+              <div className="flex flex-col items-start">
+                <span className="text-xs font-medium text-white/80">{t.settings.soundPacks[userSettings.soundPack]}</span>
+                {userSettings.soundPack === 'real-zen' && realZenAvailable === false && (
+                  <span className="text-[10px] text-yellow-200/70 mt-0.5">
+                    {userSettings.language === 'vi' ? 'Thiếu file âm thanh' : 'Audio files missing'}
+                  </span>
+                )}
+              </div>
+              <ChevronDown size={16} className={clsx("transition-transform duration-200", packOpen ? "rotate-180" : "rotate-0")} />
+            </button>
+
+            {packOpen && (
+              <div className="mt-2 bg-white/[0.02] rounded-[1.5rem] border border-white/5 p-3 space-y-1" role="listbox">
+                {soundPacks.map(pack => {
+                  const disabled = pack === 'real-zen' && realZenAvailable === false;
+                  return (
+                    <button
+                      key={pack}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => {
+                        if (disabled) return;
+                        triggerHaptic();
+                        setSoundPack(pack);
+                        setPackOpen(false);
+                      }}
+                      className={clsx(
+                        "w-full text-left px-4 py-3.5 rounded-xl transition-all flex items-center justify-between group",
+                        disabled
+                          ? "text-white/20 cursor-not-allowed"
+                          : userSettings.soundPack === pack
+                            ? "bg-white/10 text-white"
+                            : "text-white/40 hover:bg-white/5 hover:text-white"
+                      )}
+                    >
+                      <div className="flex flex-col">
+                        <span className="text-xs font-medium tracking-wide">{t.settings.soundPacks[pack]}</span>
+                        {pack === 'real-zen' && realZenAvailable === false && (
+                          <span className="text-[10px] text-yellow-200/60 mt-0.5">
+                            {userSettings.language === 'vi' ? 'Cần bổ sung audio pack “real-zen”' : 'Requires local “real-zen” audio pack'}
+                          </span>
+                        )}
+                      </div>
+                      {userSettings.soundPack === pack && <Check size={14} />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>
