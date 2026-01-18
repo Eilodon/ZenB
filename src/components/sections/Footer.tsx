@@ -77,7 +77,9 @@ export function Footer({ selectedPatternId, setSelectedPatternId }: FooterProps)
     if (record && record.safety_lock_until > Date.now()) {
       const remainMs = Math.max(0, record.safety_lock_until - Date.now());
       const h = Math.floor(remainMs / 3600000);
-      return { locked: true, reason: `${h}h Lock` };
+      if (h >= 1) return { locked: true, reason: `${h}h Lock` };
+      const m = Math.max(1, Math.ceil(remainMs / 60000));
+      return { locked: true, reason: `${m}m Lock` };
     }
     if (pattern.tier === 1) return { locked: false };
     const qualitySessions = history.filter(h => h.durationSec > 60);

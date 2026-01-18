@@ -60,8 +60,8 @@ export function HistorySheet() {
 
     // [P1.3 UPGRADE] Data visualization: Emotional journey & bio-metrics trends
     const chartData = useMemo(() => {
-        // Get last 10 sessions for trend analysis
-        const recentSessions = history.slice(-10).reverse();
+        // History is stored newest-first; charts read best oldest->newest.
+        const recentSessions = history.slice(0, 10).reverse();
 
         return recentSessions.map((session, idx) => {
             const date = new Date(session.timestamp);

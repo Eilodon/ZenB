@@ -96,7 +96,9 @@ export class GeminiSomaticBridge {
   private toolExecutor: ToolExecutor;  // NEW: Safe function calling
   private session: any | null = null;
   private audioContext: AudioContext | null = null;
+  private inputAudioContext: AudioContext | null = null;
   private inputProcessor: ScriptProcessorNode | null = null;
+  private inputSource: MediaStreamAudioSourceNode | null = null;
   private mediaStream: MediaStream | null = null;
   private nextStartTime = 0;
   private isConnected = false;
@@ -183,6 +185,8 @@ export class GeminiSomaticBridge {
     if (this.audioContext && this.mediaStream) {
       const inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       const source = inputCtx.createMediaStreamSource(this.mediaStream);
+      this.inputAudioContext = inputCtx;
+      this.inputSource = source;
 
       this.inputProcessor = inputCtx.createScriptProcessor(4096, 1, 1);
 
@@ -378,6 +382,14 @@ export class GeminiSomaticBridge {
     if (this.inputProcessor) {
       this.inputProcessor.disconnect();
       this.inputProcessor = null;
+    }
+    if (this.inputSource) {
+      this.inputSource.disconnect();
+      this.inputSource = null;
+    }
+    if (this.inputAudioContext) {
+      this.inputAudioContext.close();
+      this.inputAudioContext = null;
     }
     if (this.mediaStream) {
       this.mediaStream.getTracks().forEach(t => t.stop());

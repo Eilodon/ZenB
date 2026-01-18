@@ -239,6 +239,8 @@ export const SHADER_PRESETS = {
   },
 } as const;
 
+export type ShaderPreset = typeof SHADER_PRESETS[keyof typeof SHADER_PRESETS];
+
 // ============================================================================
 // SHADER UTILITIES
 // ============================================================================
@@ -248,7 +250,7 @@ export const SHADER_PRESETS = {
  */
 export function getShaderPreset(
   quality: 'auto' | 'low' | 'medium' | 'high'
-): typeof SHADER_PRESETS.low {
+): ShaderPreset {
   if (quality === 'low') return SHADER_PRESETS.low;
   if (quality === 'high') return SHADER_PRESETS.high;
   if (quality === 'medium') return SHADER_PRESETS.medium;

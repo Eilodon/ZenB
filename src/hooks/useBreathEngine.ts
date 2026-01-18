@@ -5,6 +5,7 @@ import { RuntimeState } from '../services/RustKernelBridge';
 import { useCameraVitals } from './useCameraVitals';
 import { useKernel } from '../kernel/KernelProvider';
 import { SafetyConfig } from '../config/SafetyConfig';
+import { ZenVitalsSnapshot } from '../vitals/snapshot';
 
 type EngineRefs = {
     progressRef: React.MutableRefObject<number>;
@@ -20,18 +21,30 @@ export function useBreathEngine(): EngineRefs {
     const currentPattern = useSessionStore((s) => s.currentPattern);
     const stopSession = useSessionStore((s) => s.stopSession);
     const syncState = useSessionStore((s) => s.syncState);
+    const setCameraError = useSessionStore((s) => s.setCameraError);
 
     const storeUserSettings = useSettingsStore((s) => s.userSettings);
 
     // Visual Interpolation Refs
     const progressRef = useRef<number>(0);
     const entropyRef = useRef<number>(0);
+    const phaseEpochPerfMsRef = useRef<number>(0);
+    const phaseDurationSecRef = useRef<number>(1);
 
     // Inject Kernel
     const kernel = useKernel();
 
     // --- SENSOR DRIVER: CAMERA VITALS ---
-    const { vitals } = useCameraVitals(isActive && storeUserSettings.cameraVitalsEnabled);
+    const { vitals, error: cameraError } = useCameraVitals(isActive && storeUserSettings.cameraVitalsEnabled);
+    const vitalsRef = useRef<ZenVitalsSnapshot | null>(null);
+
+    useEffect(() => {
+        vitalsRef.current = vitals;
+    }, [vitals]);
+
+    useEffect(() => {
+        setCameraError(cameraError);
+    }, [cameraError, setCameraError]);
 
     // --- KERNEL CONTROL BUS ---
 
@@ -42,6 +55,8 @@ export function useBreathEngine(): EngineRefs {
             kernel.dispatch({ type: 'START_SESSION', timestamp: Date.now() });
         } else {
             progressRef.current = 0;
+            phaseEpochPerfMsRef.current = 0;
+            phaseDurationSecRef.current = 1;
             kernel.dispatch({ type: 'HALT', reason: 'cleanup', timestamp: Date.now() });
         }
     }, [isActive, currentPattern.id, kernel]);
@@ -65,7 +80,12 @@ export function useBreathEngine(): EngineRefs {
             }
 
             // Visual Cortex Driver
-            progressRef.current = state.phaseElapsed / (state.phaseDuration || 1);
+            const duration = state.phaseDuration || 1;
+            progressRef.current = state.phaseElapsed / duration;
+            phaseDurationSecRef.current = duration;
+            // Convert discrete kernel updates into smooth visual progress.
+            // (Kernel ticks at SafetyConfig.clocks.controlHz, but visuals should be display-rate smooth.)
+            phaseEpochPerfMsRef.current = performance.now() - (state.phaseElapsed * 1000);
             entropyRef.current = state.belief.prediction_error;
 
             // UI State Sync
@@ -90,9 +110,21 @@ export function useBreathEngine(): EngineRefs {
 
         const tickLoop = (now: number) => {
             if (isPaused) {
+                // Freeze progress while paused by shifting the epoch forward by the paused wall-time.
+                if (phaseEpochPerfMsRef.current) {
+                    phaseEpochPerfMsRef.current += (now - lastTime);
+                }
                 lastTime = now;
                 frameId = requestAnimationFrame(tickLoop);
                 return;
+            }
+
+            // Smooth visual progress at display rate (independent of controlHz).
+            if (phaseEpochPerfMsRef.current) {
+                const duration = phaseDurationSecRef.current || 1;
+                const elapsedSec = (now - phaseEpochPerfMsRef.current) / 1000;
+                const p = elapsedSec / duration;
+                progressRef.current = Math.max(0, Math.min(1, p));
             }
 
             const dt = Math.min((now - lastTime) / 1000, SafetyConfig.clocks.maxFrameDtSec);
@@ -111,19 +143,20 @@ export function useBreathEngine(): EngineRefs {
                     user_interaction: undefined
                 };
 
-                if (vitals && vitals.quality.quality !== 'invalid') {
-                    if (vitals.hr.value !== undefined) {
-                        tickData.heart_rate = vitals.hr.value;
-                        tickData.hr_confidence = vitals.hr.confidence;
+                const latestVitals = vitalsRef.current;
+                if (latestVitals && latestVitals.quality.quality !== 'invalid') {
+                    if (latestVitals.hr.value !== undefined) {
+                        tickData.heart_rate = latestVitals.hr.value;
+                        tickData.hr_confidence = latestVitals.hr.confidence;
                     }
-                    if (vitals.rr.value !== undefined) {
-                        tickData.respiration_rate = vitals.rr.value;
+                    if (latestVitals.rr.value !== undefined) {
+                        tickData.respiration_rate = latestVitals.rr.value;
                     }
-                    if (vitals.hrv.value !== undefined) {
-                        tickData.stress_index = vitals.hrv.value.stressIndex;
+                    if (latestVitals.hrv.value !== undefined) {
+                        tickData.stress_index = latestVitals.hrv.value.stressIndex;
                     }
-                    if (vitals.affect.value !== undefined) {
-                        tickData.facial_valence = vitals.affect.value.valence;
+                    if (latestVitals.affect.value !== undefined) {
+                        tickData.facial_valence = latestVitals.affect.value.valence;
                     }
                 }
 
@@ -137,7 +170,9 @@ export function useBreathEngine(): EngineRefs {
 
         frameId = requestAnimationFrame(tickLoop);
         return () => cancelAnimationFrame(frameId);
-    }, [isActive, isPaused, vitals, kernel]);
+    }, [isActive, isPaused, kernel]);
 
-    return { progressRef, entropyRef };
+    const stableRefs = useRef<EngineRefs | null>(null);
+    if (!stableRefs.current) stableRefs.current = { progressRef, entropyRef };
+    return stableRefs.current;
 }

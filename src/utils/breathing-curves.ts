@@ -311,6 +311,8 @@ export interface MaterialProperties {
     iridescence: number;
 }
 
+const lerpNumber = (min: number, max: number, t: number) => min + (max - min) * t;
+
 const MATERIAL_RANGES = {
     roughness: { min: 0.15, max: 0.55 },
     transmission: { min: 0.45, max: 0.95 },
@@ -322,6 +324,28 @@ const MATERIAL_RANGES = {
 };
 
 /**
+ * Allocation-free variant of `calculateMaterialProperties`.
+ */
+export function calculateMaterialPropertiesInto(
+    out: MaterialProperties,
+    breathIntensity: number,
+    aiPulse: number = 0
+): MaterialProperties {
+    // AI pulse increases iridescence and transmission
+    const aiBoost = aiPulse * 0.3;
+    const effectiveBreath = Math.min(1, breathIntensity + aiBoost);
+
+    out.roughness = lerpNumber(MATERIAL_RANGES.roughness.max, MATERIAL_RANGES.roughness.min, effectiveBreath);
+    out.transmission = lerpNumber(MATERIAL_RANGES.transmission.min, MATERIAL_RANGES.transmission.max, effectiveBreath);
+    out.clearcoat = lerpNumber(MATERIAL_RANGES.clearcoat.min, MATERIAL_RANGES.clearcoat.max, effectiveBreath);
+    out.clearcoatRoughness = lerpNumber(MATERIAL_RANGES.clearcoatRoughness.max, MATERIAL_RANGES.clearcoatRoughness.min, effectiveBreath);
+    out.ior = lerpNumber(MATERIAL_RANGES.ior.min, MATERIAL_RANGES.ior.max, effectiveBreath);
+    out.thickness = lerpNumber(MATERIAL_RANGES.thickness.min, MATERIAL_RANGES.thickness.max, effectiveBreath);
+    out.iridescence = lerpNumber(MATERIAL_RANGES.iridescence.min, MATERIAL_RANGES.iridescence.max, effectiveBreath + aiPulse * 0.5);
+    return out;
+}
+
+/**
  * Calculate material properties based on breath intensity
  * Higher breath = more glass-like, more refractive
  */
@@ -329,21 +353,19 @@ export function calculateMaterialProperties(
     breathIntensity: number,
     aiPulse: number = 0
 ): MaterialProperties {
-    const lerp = (min: number, max: number, t: number) => min + (max - min) * t;
-
-    // AI pulse increases iridescence and transmission
-    const aiBoost = aiPulse * 0.3;
-    const effectiveBreath = Math.min(1, breathIntensity + aiBoost);
-
-    return {
-        roughness: lerp(MATERIAL_RANGES.roughness.max, MATERIAL_RANGES.roughness.min, effectiveBreath),
-        transmission: lerp(MATERIAL_RANGES.transmission.min, MATERIAL_RANGES.transmission.max, effectiveBreath),
-        clearcoat: lerp(MATERIAL_RANGES.clearcoat.min, MATERIAL_RANGES.clearcoat.max, effectiveBreath),
-        clearcoatRoughness: lerp(MATERIAL_RANGES.clearcoatRoughness.max, MATERIAL_RANGES.clearcoatRoughness.min, effectiveBreath),
-        ior: lerp(MATERIAL_RANGES.ior.min, MATERIAL_RANGES.ior.max, effectiveBreath),
-        thickness: lerp(MATERIAL_RANGES.thickness.min, MATERIAL_RANGES.thickness.max, effectiveBreath),
-        iridescence: lerp(MATERIAL_RANGES.iridescence.min, MATERIAL_RANGES.iridescence.max, effectiveBreath + aiPulse * 0.5),
-    };
+    return calculateMaterialPropertiesInto(
+        {
+            roughness: 0,
+            transmission: 0,
+            clearcoat: 0,
+            clearcoatRoughness: 0,
+            ior: 0,
+            thickness: 0,
+            iridescence: 0,
+        },
+        breathIntensity,
+        aiPulse
+    );
 }
 
 // ============================================================================

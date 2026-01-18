@@ -5,7 +5,7 @@
  */
 
 import { Variants, Transition } from 'framer-motion';
-import { DURATION, EASING, SPRING_PRESETS } from './tokens';
+import { DURATION, SPRING_PRESETS } from './tokens';
 
 // ============================================================================
 // FRAMER MOTION VARIANTS
@@ -501,6 +501,7 @@ export const ANIMATIONS = {
     slideDown: SLIDE_DOWN_VARIANTS,
     slideLeft: SLIDE_LEFT_VARIANTS,
     slideRight: SLIDE_RIGHT_VARIANTS,
+    scaleIn: SCALE_VARIANTS,
     scale: SCALE_VARIANTS,
     scaleBounce: SCALE_BOUNCE_VARIANTS,
     bottomSheet: BOTTOM_SHEET_VARIANTS,

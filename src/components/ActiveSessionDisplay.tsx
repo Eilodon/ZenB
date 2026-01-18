@@ -9,7 +9,6 @@ import { useEngine } from '../engine/EngineProvider';
 import { TRANSLATIONS } from '../translations';
 import { ProgressArc } from './ProgressArc';
 import { useKernel } from '../kernel/KernelProvider';
-import { useCameraVitals } from '../hooks/useCameraVitals';
 import { AIConnectionStatus } from '../services/RustKernelBridge';
 import { LiveResultCard } from '../design-system';
 
@@ -18,13 +17,12 @@ export function ActiveSessionDisplay() {
     const isPaused = useSessionStore(s => s.isPaused);
     const phase = useSessionStore(s => s.phase);
     const cycleCount = useSessionStore(s => s.cycleCount);
+    const cameraError = useSessionStore(s => s.cameraError);
     const userSettings = useSettingsStore(s => s.userSettings);
 
     const { progressRef } = useEngine();
     const animationCoordinator = useAnimationCoordinator();
     const kernel = useKernel();
-
-    const { error: cameraError } = useCameraVitals(isActive && userSettings.cameraVitalsEnabled);
 
     const containerRef = useRef<HTMLDivElement>(null);
     const ringCircleRef = useRef<SVGCircleElement>(null);

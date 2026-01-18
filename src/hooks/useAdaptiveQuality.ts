@@ -485,7 +485,7 @@ export function useQualityManager(
     const systemReducedMotion = useReducedMotion();
     const batteryStatus = useBatteryStatus();
 
-    const { tier, config, capabilities, onFrame, setTier, getCurrentFPS } = useAdaptiveQuality(
+    const { tier, capabilities, onFrame, setTier, getCurrentFPS } = useAdaptiveQuality(
         userQualityPreference,
         {
             // Reduce thresholds if on low battery

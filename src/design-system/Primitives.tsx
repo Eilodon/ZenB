@@ -163,26 +163,38 @@ export const KineticSnackbar: React.FC<KineticSnackbarProps> = ({
   };
   const Icon = IconMap[kind];
 
-  const colors = {
-    success: `border-[${COLORS.semantic.success.DEFAULT}]/50 text-[${COLORS.semantic.success[100]}]`,
-    warn: `border-[${COLORS.semantic.warning.DEFAULT}]/50 text-[${COLORS.semantic.warning[100]}]`,
-    error: `border-[${COLORS.semantic.error.DEFAULT}]/50 text-[${COLORS.semantic.error[100]}]`
-  };
+  const palette = {
+    success: { border: COLORS.semantic.success.DEFAULT, text: COLORS.semantic.success[100], icon: COLORS.semantic.success.DEFAULT },
+    warn: { border: COLORS.semantic.warning.DEFAULT, text: COLORS.semantic.warning[100], icon: COLORS.semantic.warning.DEFAULT },
+    error: { border: COLORS.semantic.error.DEFAULT, text: COLORS.semantic.error[100], icon: COLORS.semantic.error.DEFAULT },
+  } as const;
+
+  useEffect(() => {
+    const id = window.setTimeout(() => onClose(), 3500);
+    return () => window.clearTimeout(id);
+  }, [onClose, text, kind]);
 
   return (
     <motion.div
       role="status"
       className={clsx(
         "fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] min-w-[300px] max-w-[90vw] px-4 py-3 rounded-[12px] border backdrop-blur-xl bg-white/[0.05] shadow-2xl flex items-center gap-3",
-        colors[kind]
       )}
+      style={{ borderColor: palette[kind].border, color: palette[kind].text }}
       variants={ANIMATIONS.variants.snackbar}
       initial="initial"
       animate="animate"
       exit="exit"
     >
-      <Icon size={18} className={kind === 'success' ? 'text-green-500' : kind === 'warn' ? 'text-amber-500' : 'text-red-500'} />
+      <Icon size={18} style={{ color: palette[kind].icon }} />
       <span className="text-sm font-medium">{text}</span>
+      <button
+        onClick={onClose}
+        className="ml-auto rounded-md p-1 text-white/50 hover:bg-white/10 hover:text-white transition-colors"
+        aria-label="Dismiss"
+      >
+        <X size={14} />
+      </button>
     </motion.div>
   );
 };

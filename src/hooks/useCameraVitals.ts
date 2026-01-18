@@ -141,6 +141,8 @@ export function useCameraVitals(enabled: boolean) {
 
     setIsReady(false);
     setVitals(null);
+    setGuidance([]);
+    setError(null);
   };
 
   return { vitals, isReady, error, guidance };

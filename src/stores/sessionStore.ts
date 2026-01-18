@@ -5,6 +5,7 @@ import { BREATHING_PATTERNS, BreathPattern, BreathPhase, BreathingType, SessionS
 type SessionState = {
   isActive: boolean;
   isPaused: boolean;
+  cameraError: string | null;
   currentPattern: BreathPattern;
   phase: BreathPhase;
   cycleCount: number;
@@ -16,6 +17,7 @@ type SessionState = {
   stopSession: () => void;
   togglePause: () => void;
   finishSession: (stats?: SessionStats) => void;
+  setCameraError: (error: string | null) => void;
   
   // Kernel Bridge
   syncState: (phase: BreathPhase, cycleCount: number) => void;
@@ -24,6 +26,7 @@ type SessionState = {
 export const useSessionStore = create<SessionState>((set, get) => ({
   isActive: false,
   isPaused: false,
+  cameraError: null,
   currentPattern: BREATHING_PATTERNS['4-7-8'],
   phase: 'inhale',
   cycleCount: 0,
@@ -34,6 +37,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     set({
       isActive: true,
       isPaused: false,
+      cameraError: null,
       currentPattern: BREATHING_PATTERNS[type],
       phase: 'inhale',
       cycleCount: 0,
@@ -41,7 +45,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       lastSessionStats: null,
     }),
 
-  stopSession: () => set({ isActive: false, isPaused: false, cycleCount: 0, phase: 'inhale', sessionStartTime: 0 }),
+  stopSession: () => set({ isActive: false, isPaused: false, cameraError: null, cycleCount: 0, phase: 'inhale', sessionStartTime: 0 }),
   
   togglePause: () => set((s) => ({ isPaused: !s.isPaused })),
 
@@ -52,6 +56,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         set({
             isActive: false,
             isPaused: false,
+            cameraError: null,
             sessionStartTime: 0,
             lastSessionStats: stats
         });
@@ -64,6 +69,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     set({
       isActive: false,
       isPaused: false,
+      cameraError: null,
       sessionStartTime: 0,
       lastSessionStats: {
         durationSec,
@@ -73,6 +79,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       }
     });
   },
+
+  setCameraError: (error) => set({ cameraError: error }),
 
   syncState: (phase, cycleCount) => set({ phase, cycleCount }),
 }));
