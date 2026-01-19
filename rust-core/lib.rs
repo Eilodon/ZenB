@@ -3,7 +3,10 @@
 //! This crate exposes the complete AGOLOS Rust core to mobile platforms via UniFFI.
 //! Provides access to Engine, BeliefState, Safety, and Resonance tracking.
 
-use std::sync::Mutex;
+// SAFETY: Using parking_lot::Mutex instead of std::sync::Mutex
+// parking_lot::Mutex does NOT have poison semantics, so it won't panic
+// if a thread panics while holding the lock. This is critical for a health app.
+use parking_lot::Mutex;
 use std::time::Instant;
 
 use serde::{Serialize, Deserialize};
@@ -48,32 +51,163 @@ impl BreathPattern {
     }
 }
 
+/// Complete breathing pattern library matching TypeScript definitions
+/// All patterns are evidence-based with documented physiological effects
 pub fn builtin_patterns() -> HashMap<String, BreathPattern> {
     let mut m = HashMap::new();
+
+    // === CALMING PATTERNS (Parasympathetic Activation) ===
+
     m.insert(
         "4-7-8".to_string(),
         BreathPattern {
             id: "4-7-8".to_string(),
             label: "Relaxing Breath".to_string(),
             tag: "calm".to_string(),
-            description: "Classic relaxing technique".to_string(),
+            description: "Dr. Andrew Weil's classic relaxation technique".to_string(),
             timings: BreathTimings { inhale: 4.0, hold_in: 7.0, exhale: 8.0, hold_out: 0.0 },
             recommended_cycles: 4,
             arousal_impact: -0.8,
         }
     );
-     m.insert(
+
+    m.insert(
+        "calm".to_string(),
+        BreathPattern {
+            id: "calm".to_string(),
+            label: "Calm Wave".to_string(),
+            tag: "calm".to_string(),
+            description: "Gentle, extended exhale for everyday relaxation".to_string(),
+            timings: BreathTimings { inhale: 4.0, hold_in: 0.0, exhale: 6.0, hold_out: 0.0 },
+            recommended_cycles: 10,
+            arousal_impact: -0.5,
+        }
+    );
+
+    m.insert(
+        "7-11".to_string(),
+        BreathPattern {
+            id: "7-11".to_string(),
+            label: "7-11 Anti-Anxiety".to_string(),
+            tag: "calm".to_string(),
+            description: "NHS-recommended technique for acute anxiety relief".to_string(),
+            timings: BreathTimings { inhale: 7.0, hold_in: 0.0, exhale: 11.0, hold_out: 0.0 },
+            recommended_cycles: 6,
+            arousal_impact: -0.9,
+        }
+    );
+
+    m.insert(
+        "deep-relax".to_string(),
+        BreathPattern {
+            id: "deep-relax".to_string(),
+            label: "Deep Relaxation".to_string(),
+            tag: "calm".to_string(),
+            description: "Extended hold and exhale for deep parasympathetic activation".to_string(),
+            timings: BreathTimings { inhale: 4.0, hold_in: 7.0, exhale: 10.0, hold_out: 0.0 },
+            recommended_cycles: 5,
+            arousal_impact: -0.95,
+        }
+    );
+
+    // === FOCUS PATTERNS (Balanced Autonomic) ===
+
+    m.insert(
         "box".to_string(),
         BreathPattern {
             id: "box".to_string(),
             label: "Box Breathing".to_string(),
             tag: "focus".to_string(),
-            description: "Navy SEAL focus technique".to_string(),
+            description: "Navy SEAL technique for focus under pressure".to_string(),
             timings: BreathTimings { inhale: 4.0, hold_in: 4.0, exhale: 4.0, hold_out: 4.0 },
             recommended_cycles: 10,
             arousal_impact: 0.0,
         }
     );
+
+    m.insert(
+        "coherence".to_string(),
+        BreathPattern {
+            id: "coherence".to_string(),
+            label: "Heart Coherence".to_string(),
+            tag: "focus".to_string(),
+            description: "HeartMath-style 5-second rhythm for HRV optimization".to_string(),
+            timings: BreathTimings { inhale: 5.0, hold_in: 0.0, exhale: 5.0, hold_out: 0.0 },
+            recommended_cycles: 12,
+            arousal_impact: -0.2,
+        }
+    );
+
+    m.insert(
+        "triangle".to_string(),
+        BreathPattern {
+            id: "triangle".to_string(),
+            label: "Triangle Breath".to_string(),
+            tag: "focus".to_string(),
+            description: "Balanced three-phase pattern for meditation".to_string(),
+            timings: BreathTimings { inhale: 4.0, hold_in: 4.0, exhale: 4.0, hold_out: 0.0 },
+            recommended_cycles: 8,
+            arousal_impact: -0.1,
+        }
+    );
+
+    m.insert(
+        "tactical".to_string(),
+        BreathPattern {
+            id: "tactical".to_string(),
+            label: "Tactical Breathing".to_string(),
+            tag: "focus".to_string(),
+            description: "Combat breathing for high-stress performance".to_string(),
+            timings: BreathTimings { inhale: 4.0, hold_in: 4.0, exhale: 4.0, hold_out: 4.0 },
+            recommended_cycles: 6,
+            arousal_impact: 0.1,
+        }
+    );
+
+    // === ENERGIZING PATTERNS (Sympathetic Activation) ===
+
+    m.insert(
+        "awake".to_string(),
+        BreathPattern {
+            id: "awake".to_string(),
+            label: "Energizing Breath".to_string(),
+            tag: "energy".to_string(),
+            description: "Quick inhale, short exhale for alertness boost".to_string(),
+            timings: BreathTimings { inhale: 2.0, hold_in: 0.0, exhale: 2.0, hold_out: 0.0 },
+            recommended_cycles: 15,
+            arousal_impact: 0.6,
+        }
+    );
+
+    // === ADVANCED PATTERNS (Specialized Techniques) ===
+
+    m.insert(
+        "buteyko".to_string(),
+        BreathPattern {
+            id: "buteyko".to_string(),
+            label: "Buteyko Method".to_string(),
+            tag: "advanced".to_string(),
+            description: "Reduced breathing with CO2 tolerance training".to_string(),
+            timings: BreathTimings { inhale: 3.0, hold_in: 0.0, exhale: 3.0, hold_out: 5.0 },
+            recommended_cycles: 8,
+            arousal_impact: -0.3,
+        }
+    );
+
+    m.insert(
+        "wim-hof".to_string(),
+        BreathPattern {
+            id: "wim-hof".to_string(),
+            label: "Wim Hof Method".to_string(),
+            tag: "advanced".to_string(),
+            description: "Controlled hyperventilation followed by retention".to_string(),
+            // Note: This is the prep phase. Full Wim Hof includes longer holds.
+            timings: BreathTimings { inhale: 2.0, hold_in: 0.0, exhale: 2.0, hold_out: 0.0 },
+            recommended_cycles: 30,
+            arousal_impact: 0.8,
+        }
+    );
+
     m
 }
 
@@ -387,7 +521,7 @@ impl ZenOneRuntime {
     pub fn load_pattern(&self, pattern_id: String) -> bool {
         let patterns = builtin_patterns();
         if let Some(pattern) = patterns.get(&pattern_id) {
-            let mut inner = self.inner.lock().unwrap();
+            let mut inner = self.inner.lock();
             
             // Safety check: reject if locked
             if inner.safety_locked {
@@ -405,7 +539,7 @@ impl ZenOneRuntime {
 
     /// Get current pattern ID
     pub fn current_pattern_id(&self) -> String {
-        self.inner.lock().unwrap().current_pattern_id.clone()
+        self.inner.lock().current_pattern_id.clone()
     }
 
     // =========================================================================
@@ -414,7 +548,7 @@ impl ZenOneRuntime {
 
     /// Start a breathing session
     pub fn start_session(&self) -> Result<(), ZenOneError> {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock();
 
         // Safety check
         if inner.safety_locked {
@@ -447,7 +581,7 @@ impl ZenOneRuntime {
 
     /// Stop session and get stats
     pub fn stop_session(&self) -> FfiSessionStats {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock();
         inner.status = FfiRuntimeStatus::Idle;
 
         if let Some(session) = inner.session.take() {
@@ -491,12 +625,12 @@ impl ZenOneRuntime {
 
     /// Check if session is active
     pub fn is_session_active(&self) -> bool {
-        self.inner.lock().unwrap().session.is_some()
+        self.inner.lock().session.is_some()
     }
 
     /// Pause session
     pub fn pause_session(&self) {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock();
         if inner.status == FfiRuntimeStatus::Running {
             inner.status = FfiRuntimeStatus::Paused;
         }
@@ -504,7 +638,7 @@ impl ZenOneRuntime {
 
     /// Resume paused session
     pub fn resume_session(&self) {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock();
         if inner.status == FfiRuntimeStatus::Paused {
             inner.status = FfiRuntimeStatus::Running;
         }
@@ -516,7 +650,7 @@ impl ZenOneRuntime {
 
     /// Process a camera frame and update state
     pub fn process_frame(&self, r: f32, g: f32, b: f32, timestamp_us: i64) -> FfiFrame {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock();
 
         // Calculate delta time
         let dt_us = if inner.last_timestamp_us > 0 {
@@ -583,7 +717,7 @@ impl ZenOneRuntime {
 
     /// Tick without camera (timer-based update)
     pub fn tick(&self, dt_sec: f32, timestamp_us: i64) -> FfiFrame {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock();
 
         let dt_us = (dt_sec * 1_000_000.0) as u64;
         inner.last_timestamp_us = timestamp_us;
@@ -618,7 +752,7 @@ impl ZenOneRuntime {
 
     /// Get full runtime state snapshot
     pub fn get_state(&self) -> FfiRuntimeState {
-        let inner = self.inner.lock().unwrap();
+        let inner = self.inner.lock();
 
         let session_duration = inner
             .session
@@ -651,13 +785,13 @@ impl ZenOneRuntime {
 
     /// Get current belief state
     pub fn get_belief(&self) -> FfiBeliefState {
-        let inner = self.inner.lock().unwrap();
+        let inner = self.inner.lock();
         get_engine_belief(&inner.engine)
     }
 
     /// Get safety status
     pub fn get_safety_status(&self) -> FfiSafetyStatus {
-        let inner = self.inner.lock().unwrap();
+        let inner = self.inner.lock();
         FfiSafetyStatus {
             is_locked: inner.safety_locked,
             trauma_count: 0,
@@ -672,7 +806,7 @@ impl ZenOneRuntime {
 
     /// Adjust tempo scale (with safety bounds)
     pub fn adjust_tempo(&self, scale: f32, reason: String) -> Result<f32, ZenOneError> {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock();
 
         // Safety bounds [0.8, 1.4]
         const MIN_TEMPO: f32 = 0.8;
@@ -694,7 +828,7 @@ impl ZenOneRuntime {
 
     /// Update context (time of day, charging status, etc.)
     pub fn update_context(&self, local_hour: u8, is_charging: bool, recent_sessions: u16) {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock();
         inner.engine.update_context(Context {
             local_hour,
             is_charging,
@@ -704,7 +838,7 @@ impl ZenOneRuntime {
 
     /// Emergency halt
     pub fn emergency_halt(&self, reason: String) {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock();
         inner.status = FfiRuntimeStatus::SafetyLock;
         inner.safety_locked = true;
         log::error!("EMERGENCY HALT: {}", reason);
@@ -712,7 +846,7 @@ impl ZenOneRuntime {
 
     /// Reset safety lock (requires explicit action)
     pub fn reset_safety_lock(&self) {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock();
         inner.safety_locked = false;
         inner.status = FfiRuntimeStatus::Idle;
         log::info!("Safety lock reset");
