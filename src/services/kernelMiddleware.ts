@@ -146,3 +146,51 @@ export const biofeedbackMiddleware: Middleware = (event, _before, after, api) =>
     lastUpdateTime = 0;
   }
 };
+
+/**
+ * SAFETY SYNC MIDDLEWARE (Eidolon Architecture Fix)
+ * ==================================================
+ * Ensures the Kernel is the Single Source of Truth for safety operations.
+ * 
+ * Flow:
+ * 1. UI dispatches RESET_SAFETY_LOCK { patternId } to Kernel
+ * 2. This middleware intercepts it
+ * 3. Calls Store to update persistent registry
+ * 4. Queues LOAD_SAFETY_REGISTRY to sync Kernel memory
+ */
+export const safetySyncMiddleware: Middleware = (event, _before, _after, api) => {
+  // 1. Handle Pattern Unlock (Grain-specific)
+  if (event.type === 'RESET_SAFETY_LOCK' && event.patternId) {
+    const store = useSettingsStore.getState();
+
+    // Update persistent store
+    store.resetSafetyLock(event.patternId as any);
+
+    // Sync back to Kernel memory immediately
+    const updatedRegistry = useSettingsStore.getState().userSettings.safetyRegistry;
+    api.queue({
+      type: 'LOAD_SAFETY_REGISTRY',
+      registry: updatedRegistry,
+      timestamp: Date.now()
+    });
+  }
+
+  // 2. Handle Global Unlock (Emergency Halt Recovery)
+  if (event.type === 'RESET_SAFETY_LOCK' && !event.patternId) {
+    // If we had a global lock flag in store, we would clear it here.
+    // Currently global lock is runtime-only in Rust.
+  }
+
+  // 3. Handle Boot / Rehydration
+  // When kernel boots, we must inject the persistent registry
+  // (This relies on BOOT event being dispatched by Bridge)
+  if (event.type === 'BOOT') {
+    const registry = useSettingsStore.getState().userSettings.safetyRegistry;
+    api.queue({
+      type: 'LOAD_SAFETY_REGISTRY',
+      registry,
+      timestamp: Date.now()
+    });
+  }
+};
+

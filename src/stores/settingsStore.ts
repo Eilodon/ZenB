@@ -2,15 +2,12 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { UserSettings, SessionHistoryItem, ColorTheme, QualityTier, Language, SoundPack, BreathingType, BeliefState } from '../types';
-import { bioFS } from '../services/bioFS';
 
 // NOTE: We need a way to access Kernel from store actions, but Zustand is outside React context.
 // In a pure architecture, the Store would dispatch to Kernel. 
 // For this pragmatic implementation, we'll assume the Kernel singleton updates the store via listeners, 
 // OR the UI calls store actions which then interact with kernel via the provider hooks in components.
-// The `resetSafetyLock` logic here will just update the store state, relying on Kernel to sync via `loadSafetyRegistry`.
-// However, to ensure persistence sync, we'll write to bioFS directly here as well if needed, 
-// though Kernel is the source of truth for runtime.
+// Safety registry operations are handled by the kernel bridge and storage services.
 
 type SettingsState = {
   userSettings: UserSettings;
@@ -29,10 +26,10 @@ type SettingsState = {
   setSoundPack: (p: SoundPack) => void;
   completeOnboarding: () => void;
   clearHistory: () => void;
+  resetSafetyLock: (patternId: BreathingType) => void;
   setLastUsedPattern: (p: BreathingType) => void;
   toggleCameraVitals: () => void;
   toggleKernelMonitor: () => void;
-  resetSafetyLock: (patternId: BreathingType) => void;
   toggleAiCoach: () => void; // v6.0
   toggleCoaching: () => void; // v6.1 In-session coaching
   setPassphrase: (passphrase: string) => Promise<void>; // P1 Security Fix
@@ -69,13 +66,13 @@ export const useSettingsStore = create<SettingsState>()(
         streak: 0,
         lastBreathDate: '',
         lastUsedPattern: '4-7-8',
-        safetyRegistry: {},
         cameraVitalsEnabled: false,
         showKernelMonitor: false,
         aiCoachEnabled: false, // v6.0 Default
         coachingEnabled: true,  // In-session coaching messages enabled by default
         hasPassphrase: false,  // P1 Security Fix: User passphrase for encryption
-        passphraseHash: null   // SHA-256 hash for verification only (not for encryption)
+        passphraseHash: null,   // SHA-256 hash for verification only (not for encryption)
+        safetyRegistry: {} // Initialize empty registry
       },
       history: [],
       hasSeenOnboarding: false,
@@ -119,6 +116,32 @@ export const useSettingsStore = create<SettingsState>()(
         sessionStorage.setItem('zenb_passphrase', passphrase);
       },
 
+      resetSafetyLock: (patternId: BreathingType) => {
+        set((s) => {
+          const registry = { ...s.userSettings.safetyRegistry };
+          if (registry[patternId]) {
+            // Clear lock and history
+            registry[patternId] = {
+              ...registry[patternId],
+              safety_lock_until: 0,
+              cummulative_stress_score: 0, // Optional: reset stress too? Usually yes for a "reset"
+              last_incident_timestamp: 0
+            };
+          } else {
+            // Initialize if missing (defensive)
+            registry[patternId] = {
+              patternId,
+              cummulative_stress_score: 0,
+              last_incident_timestamp: 0,
+              safety_lock_until: 0,
+              resonance_history: [],
+              resonance_score: 0
+            };
+          }
+          return { userSettings: { ...s.userSettings, safetyRegistry: registry } };
+        });
+      },
+
       clearPassphrase: () => {
         set((s) => ({
           userSettings: {
@@ -129,22 +152,6 @@ export const useSettingsStore = create<SettingsState>()(
         }));
         sessionStorage.removeItem('zenb_passphrase');
       },
-
-      resetSafetyLock: (patternId) => set((state) => {
-        const registry = { ...state.userSettings.safetyRegistry };
-        if (registry[patternId]) {
-          registry[patternId] = {
-            ...registry[patternId],
-            safety_lock_until: 0,
-            cummulative_stress_score: 0
-          };
-          // Also persist to BioFS immediately to ensure Kernel picks it up on next boot/sync
-          bioFS.setMeta('safetyRegistry', registry);
-        }
-        return {
-          userSettings: { ...state.userSettings, safetyRegistry: registry }
-        };
-      }),
 
       registerSessionComplete: (durationSec, patternId, cycles, finalBelief) => {
         const state = get();
@@ -200,5 +207,4 @@ export const useSettingsStore = create<SettingsState>()(
         history: state.history
       }),
     }
-  )
-);
+  ));

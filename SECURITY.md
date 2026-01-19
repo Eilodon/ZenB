@@ -51,7 +51,7 @@ ZenB is a health application handling **sensitive biometric data** (heart rate, 
 
 | Limitation | Risk | Mitigation Path |
 |------------|------|-----------------|
-| Device fingerprint encryption | **High** | Require user passphrase |
+| Unencrypted local storage when no passphrase | **High** | Require user passphrase or explicit opt-in |
 | API key in localStorage | **Medium** | Use OS keychain via Tauri |
 | Async state race conditions | **Medium** | Implement proper state sync |
 | Event log unbounded | **Low** | Add size-based rotation |
@@ -111,9 +111,9 @@ ZenB is a health application handling **sensitive biometric data** (heart rate, 
 | Key Derivation | PBKDF2 (100K iterations) | Strong |
 | IV | Random 96-bit per event | Strong |
 | Integrity | HMAC-SHA256 | Strong |
-| **Key Source** | **Device fingerprint** | **WEAK** |
+| **Key Source** | **User passphrase (required)** | **Strong** |
 
-**Warning**: The device fingerprint (user agent + screen + timezone) is guessable. An attacker with physical access OR a malicious browser extension can derive the key.
+**Note**: If no passphrase is provided, the app uses an unencrypted local store for biometrics and metadata.
 
 ### Recommended: User Passphrase
 
@@ -153,7 +153,7 @@ Consider hardware-backed keys via WebAuthn for maximum security.
 
 ### P1 (High) - In Progress
 - [ ] Move API key to OS keychain (Tauri secure storage)
-- [ ] Implement user passphrase for SecureBioFS
+- [x] Implement user passphrase for SecureBioFS
 - [ ] Add proper Tauri async state synchronization
 
 ### P2 (Medium) - Planned

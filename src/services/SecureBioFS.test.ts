@@ -116,18 +116,8 @@ describe('SecureBioFS - Passphrase Flow', () => {
         expect(events.length).toBe(0);
     });
 
-    it('should use device fingerprint when no passphrase provided', async () => {
+    it('should require a passphrase', async () => {
         const fs = new SecureBioFS();
-        await fs.init(); // No passphrase = device fingerprint
-
-        const event: KernelEvent = {
-            type: 'BOOT',
-            timestamp: Date.now()
-        };
-
-        await fs.writeEvent(event);
-        const events = await fs.queryEvents(0, Date.now());
-
-        expect(events.length).toBe(1);
+        await expect(fs.init()).rejects.toThrow('SecureBioFS requires a passphrase');
     });
 });

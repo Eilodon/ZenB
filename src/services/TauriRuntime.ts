@@ -324,6 +324,22 @@ export class TauriZenOneRuntime {
         if (!invokeFunc) throw new Error('Tauri not initialized');
         return invokeFunc('get_binaural_recommendation', { arousalTarget }) as Promise<FfiBrainWaveState>;
     }
+
+    // =========================================================================
+    // SECURE VAULT COMMANDS
+    // =========================================================================
+
+    async encryptBlob(passphrase: string, data: Uint8Array): Promise<Uint8Array> {
+        if (!invokeFunc) throw new Error('Tauri not initialized');
+        // Tauri passes byte arrays as sequence<u8> (number[]) or Uint8Array depending on config.
+        // Usually Uint8Array works best.
+        return invokeFunc('encrypt_blob', { passphrase, data: Array.from(data) }) as Promise<Uint8Array>;
+    }
+
+    async decryptBlob(passphrase: string, blob: Uint8Array): Promise<Uint8Array> {
+        if (!invokeFunc) throw new Error('Tauri not initialized');
+        return invokeFunc('decrypt_blob', { passphrase, blob: Array.from(blob) }) as Promise<Uint8Array>;
+    }
 }
 
 // ============================================================================

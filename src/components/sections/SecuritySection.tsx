@@ -55,7 +55,7 @@ export function SecuritySection({ triggerHaptic }: { triggerHaptic: () => void }
                             <h3 className="text-lg font-semibold">Clear Passphrase?</h3>
                         </div>
                         <p className="text-sm text-gray-400">
-                            This will remove your passphrase and switch to device fingerprint encryption.
+                            This will remove your passphrase and switch to unencrypted local storage.
                             Your existing data will remain encrypted with the old passphrase.
                         </p>
                         <div className="flex gap-3">
@@ -102,12 +102,12 @@ export function SecuritySection({ triggerHaptic }: { triggerHaptic: () => void }
                                 </div>
                                 <div>
                                     <div className="text-sm font-medium text-white">
-                                        {hasPassphrase ? 'Passphrase Encryption' : 'Device Fingerprint'}
+                                        {hasPassphrase ? 'Passphrase Encryption' : 'Unencrypted Storage'}
                                     </div>
                                     <div className="text-[10px] text-white/40 mt-0.5">
                                         {hasPassphrase
                                             ? 'Your data is encrypted with a strong passphrase'
-                                            : 'Using device fingerprint (weaker security)'}
+                                            : 'Data stored locally without encryption'}
                                     </div>
                                 </div>
                             </div>
@@ -164,7 +164,7 @@ export function SecuritySection({ triggerHaptic }: { triggerHaptic: () => void }
                                 <div className="text-xs text-yellow-200">
                                     <p className="font-medium mb-1">Security Recommendation</p>
                                     <p className="text-yellow-300/80">
-                                        Set a passphrase for stronger encryption. Device fingerprint can be guessed by malicious extensions.
+                                        Set a passphrase to encrypt local biometric data.
                                     </p>
                                 </div>
                             </div>

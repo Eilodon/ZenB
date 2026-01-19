@@ -10,7 +10,7 @@ use zenone_ffi::{ZenOneRuntime, SafetyMonitor, PidController, PatternRecommender
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .manage(RuntimeState(Mutex::new(ZenOneRuntime::new())))
+        .manage(RuntimeState(ZenOneRuntime::new()))
         .manage(SafetyMonitorState(Mutex::new(SafetyMonitor::new())))
         .manage(PidControllerState(Mutex::new(PidController::new())))
         .manage(RecommenderState(Mutex::new(PatternRecommender::new())))

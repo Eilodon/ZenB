@@ -9,11 +9,13 @@ import { SoundPack, BreathingType } from '../../types';
 import { SOUND_PACK_LIST } from '../../services/audioAssets';
 import { scheduleAudioPreload } from '../../services/audio';
 import { hapticTick } from '../../services/haptics';
+import { useKernel } from '../../kernel/KernelProvider';
 import { CameraPermissionModal } from '../modals/CameraPermissionModal';
 import { GestureBottomSheet } from '../../design-system';
 import { HolodeckOverlay } from '../HolodeckOverlay';
 import { useWearable, WEARABLE_PROVIDERS, WearableProvider } from '../../services/WearableService';
 import { VitalsDashboard } from './VitalsDashboard';
+import { loadSafetyRegistry, resetSafetyProfiles, saveSafetyRegistry } from '../../services/safetyRegistry';
 import { SecuritySection } from './SecuritySection';
 
 
@@ -37,8 +39,9 @@ export function SettingsSheet() {
   const toggleTimer = useSettingsStore(s => s.toggleTimer);
   const toggleCameraVitals = useSettingsStore(s => s.toggleCameraVitals);
   const toggleKernelMonitor = useSettingsStore(s => s.toggleKernelMonitor);
-  const resetSafetyLock = useSettingsStore(s => s.resetSafetyLock);
   const toggleAiCoach = useSettingsStore(s => s.toggleAiCoach);
+
+  const kernel = useKernel();
 
   const [showCameraPermission, setShowCameraPermission] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
@@ -69,9 +72,14 @@ export function SettingsSheet() {
   const confirmCameraPermission = () => { setShowCameraPermission(false); toggleCameraVitals(); };
   const denyCameraPermission = () => { setShowCameraPermission(false); };
 
-  const handleResetLocks = () => {
+  const handleResetLocks = async () => {
     triggerHaptic();
-    ['4-7-8', 'box', 'calm', 'coherence'].forEach(id => resetSafetyLock(id as BreathingType));
+    const targets: BreathingType[] = ['4-7-8', 'box', 'calm', 'coherence'];
+    const registry = await loadSafetyRegistry();
+    const nextRegistry = resetSafetyProfiles(registry, targets);
+    await saveSafetyRegistry(nextRegistry);
+    kernel.loadSafetyRegistry(nextRegistry);
+    kernel.dispatch({ type: 'RESET_SAFETY_LOCK', timestamp: Date.now() });
   };
 
   const handleAiToggle = async () => {

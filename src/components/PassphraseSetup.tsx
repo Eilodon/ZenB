@@ -10,13 +10,12 @@ interface PassphraseSetupProps {
  * Passphrase Setup Component
  * 
  * Allows users to set a strong passphrase for encrypting biometric data.
- * Provides strength meter and option to use device fingerprint fallback.
+ * Provides a strength meter and confirmation flow.
  */
 export function PassphraseSetup({ onComplete, onCancel }: PassphraseSetupProps) {
     const [passphrase, setPassphrase] = useState('');
     const [confirmPassphrase, setConfirmPassphrase] = useState('');
     const [showPassphrase, setShowPassphrase] = useState(false);
-    const [useDeviceFingerprint, setUseDeviceFingerprint] = useState(false);
 
     // Simple passphrase strength calculation
     const getStrength = (pass: string): { score: number; label: string; color: string } => {
@@ -38,11 +37,7 @@ export function PassphraseSetup({ onComplete, onCancel }: PassphraseSetupProps) 
     const isValid = passphrase.length >= 8 && passphrase === confirmPassphrase;
 
     const handleSubmit = () => {
-        if (useDeviceFingerprint) {
-            onComplete(null); // null = use device fingerprint
-        } else if (isValid) {
-            onComplete(passphrase);
-        }
+        if (isValid) onComplete(passphrase);
     };
 
     return (
@@ -69,27 +64,8 @@ export function PassphraseSetup({ onComplete, onCancel }: PassphraseSetupProps) 
                     </div>
                 </div>
 
-                {/* Device Fingerprint Option */}
-                <label className="flex items-start gap-3 cursor-pointer group">
-                    <input
-                        type="checkbox"
-                        checked={useDeviceFingerprint}
-                        onChange={(e) => setUseDeviceFingerprint(e.target.checked)}
-                        className="mt-1"
-                    />
-                    <div className="text-sm">
-                        <p className="font-medium group-hover:text-blue-400 transition-colors">
-                            Use device fingerprint (convenience mode)
-                        </p>
-                        <p className="text-gray-400 text-xs mt-1">
-                            Weaker security, but no passphrase to remember. Not recommended for sensitive data.
-                        </p>
-                    </div>
-                </label>
-
                 {/* Passphrase Input */}
-                {!useDeviceFingerprint && (
-                    <div className="space-y-4">
+                <div className="space-y-4">
                         {/* Passphrase Field */}
                         <div>
                             <label className="block text-sm font-medium mb-2">Passphrase</label>
@@ -162,8 +138,7 @@ export function PassphraseSetup({ onComplete, onCancel }: PassphraseSetupProps) 
                                 </li>
                             </ul>
                         </div>
-                    </div>
-                )}
+                </div>
 
                 {/* Actions */}
                 <div className="flex gap-3 pt-2">
@@ -176,11 +151,11 @@ export function PassphraseSetup({ onComplete, onCancel }: PassphraseSetupProps) 
                     </button>
                     <button
                         onClick={handleSubmit}
-                        disabled={!useDeviceFingerprint && !isValid}
+                        disabled={!isValid}
                         className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 
                      disabled:cursor-not-allowed rounded-lg transition-colors font-medium"
                     >
-                        {useDeviceFingerprint ? 'Use Device Fingerprint' : 'Set Passphrase'}
+                        Set Passphrase
                     </button>
                 </div>
             </div>

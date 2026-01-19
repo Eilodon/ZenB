@@ -10,10 +10,10 @@ name = "zenone_ffi"
 path = "lib.rs"
 
 [dependencies]
-# AGOLOS core crates (ZenB/rust-core/../../ = B.1/AGOLOS)
-zenb-core = { path = "../../dự phòng/AGOLOS/crates/zenb-core" }
-zenb-signals = { path = "../../dự phòng/AGOLOS/crates/zenb-signals" }
-zenb-store = { path = "../../dự phòng/AGOLOS/crates/zenb-store" }
+# AGOLOS core crates (Pandora Genesis SDK)
+zenb-core = { path = "../../Pandora-Genesis-SDK-main/crates/zenb-core" }
+zenb-signals = { path = "../../Pandora-Genesis-SDK-main/crates/zenb-signals" }
+zenb-store = { path = "../../Pandora-Genesis-SDK-main/crates/zenb-store" }
 
 # UniFFI for cross-platform bindings
 uniffi = { version = "0.28", features = ["cli"] }
@@ -23,6 +23,11 @@ parking_lot = "0.12"
 chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+crossbeam-channel = "0.5"
+chacha20poly1305 = "0.10"
+argon2 = "0.5"
+rand = { version = "0.8", features = ["std_rng"] }
+zeroize = { version = "1.7", features = ["derive"] }
 
 [build-dependencies]
 uniffi = { version = "0.28", features = ["build"] }

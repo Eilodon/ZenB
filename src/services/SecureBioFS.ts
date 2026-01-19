@@ -17,10 +17,10 @@
  * - Protects against: Physical storage extraction, malware with file access
  * - Does NOT protect against: XSS attacks with memory access, browser extensions
  * - Keys stored in memory (required by Web Crypto API architecture)
- * - Device fingerprint is NOT cryptographically secure (convenience, not security)
+ * - Requires a user-provided passphrase (no device fingerprint fallback)
  *
  * For stronger security:
- * - Use user-provided passphrase instead of device fingerprint
+ * - Enforce passphrase setup during onboarding
  * - Implement CSP to prevent XSS
  * - Consider WebAuthn for hardware-backed keys (future enhancement)
  *
@@ -35,149 +35,94 @@ import { KernelEvent } from '../types';
 const MAX_LOG_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 const MAX_LOG_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-// --- CRYPTO UTILITIES ---
+// --- CRYPTO UTILITIES (Rust-Backed) ---
+
+import { RustKernelBridge } from './RustKernelBridge';
 
 class CryptoService {
-  private encryptionKey: CryptoKey | null = null;
-  private signingKey: CryptoKey | null = null;
+  private bridge: RustKernelBridge;
+  private passphrase: string | null = null;
+  private cryptoInitialized = false;
 
-  /**
-   * Initialize crypto keys from user passphrase
-   */
-  async init(passphrase: string): Promise<void> {
-    // Get or create salt
-    const salt = await this.getSalt();
-
-    // Derive key material from passphrase
-    const passphraseBytes = new TextEncoder().encode(passphrase);
-    const keyMaterial = await crypto.subtle.importKey(
-      'raw',
-      passphraseBytes.buffer,
-      'PBKDF2',
-      false,
-      ['deriveKey']
-    );
-
-    // Derive encryption key (AES-256-GCM)
-    this.encryptionKey = await crypto.subtle.deriveKey(
-      {
-        name: 'PBKDF2',
-        salt: salt.buffer as ArrayBuffer,
-        iterations: 100000,
-        hash: 'SHA-256'
-      },
-      keyMaterial,
-      { name: 'AES-GCM', length: 256 },
-      false,
-      ['encrypt', 'decrypt']
-    );
-
-    // Derive signing key (HMAC-SHA256)
-    this.signingKey = await crypto.subtle.deriveKey(
-      {
-        name: 'PBKDF2',
-        salt: salt.buffer as ArrayBuffer,
-        iterations: 100000,
-        hash: 'SHA-256'
-      },
-      keyMaterial,
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign', 'verify']
-    );
+  constructor() {
+    this.bridge = new RustKernelBridge();
   }
 
   /**
-   * Encrypt data with AES-256-GCM
+   * Initialize crypto (Store passphrase in memory)
    */
-  async encrypt(data: string): Promise<{ iv: Uint8Array; ciphertext: ArrayBuffer }> {
-    if (!this.encryptionKey) throw new Error('Crypto not initialized');
+  async init(passphrase: string): Promise<void> {
+    this.passphrase = passphrase;
+    // In Rust backend, we don't store key permanently, we derive it per op or session.
+    // We keep passphrase in JS memory (which is a risk, strictly speaking, but standard for non-Tauri)
+    // Ideally, we'd push this down to Rust session entirely.
+    // For Phase 2, we pass it per call.
+    this.cryptoInitialized = true;
+  }
 
-    const iv = crypto.getRandomValues(new Uint8Array(12));  // 96-bit IV for GCM
-    const plaintext = new TextEncoder().encode(data);
+  /**
+   * Encrypt data with AES-256-GCM (Rust: ChaCha20Poly1305)
+   */
+  async encrypt(data: string): Promise<{ iv: Uint8Array; ciphertext: ArrayBuffer; signature: ArrayBuffer }> {
+    if (!this.passphrase) throw new Error('Crypto not initialized');
 
-    const ciphertext = await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv: iv },
-      this.encryptionKey,
-      plaintext.buffer as ArrayBuffer
-    );
+    const plaintextBytes = new TextEncoder().encode(data);
 
-    return { iv, ciphertext };
+    // Rust SecureVault returns a blob containing [Salt + Nonce + Ciphertext]
+    // The signature logic in legacy code was separate. SecureVault uses AEAD (ChaCha20Poly1305)
+    // which *includes* an authentication tag (integrity check).
+    // So the 'signature' return here is redundant but we keep API shape if possible,
+    // or refactor writeEvent to respect AEAD.
+
+    // Let's refactor to matching SecureVault blob structure.
+
+    const blob = await this.bridge.encryptBiometrics(this.passphrase, plaintextBytes);
+
+    // SecureVault blob format: [SaltLen(1)][Salt(...)][Nonce(12)][Ciphertext(incl tag)]
+    // We return the whole blob as 'ciphertext' for simplicity in legacy storage,
+    // or we parse it out if we want to store columns separately.
+    // Legacy SecureBioFS stores: iv, ciphertext, signature separately.
+    // SecureVault blob encapsulates all three.
+    // We will return the *whole blob* as ciphertext, and empty IV/Signature.
+    // Storage layer will just store everything in 'ciphertext' field.
+
+    return {
+      iv: new Uint8Array(0),
+      ciphertext: blob.buffer as ArrayBuffer,
+      signature: new ArrayBuffer(0) // AEAD handles this
+    };
   }
 
   /**
    * Decrypt data
    */
   async decrypt(iv: Uint8Array, ciphertext: ArrayBuffer): Promise<string> {
-    if (!this.encryptionKey) throw new Error('Crypto not initialized');
+    if (!this.passphrase) throw new Error('Crypto not initialized');
 
-    const plaintext = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: iv.buffer as ArrayBuffer },
-      this.encryptionKey,
-      ciphertext
-    );
+    // If we migrated to SecureVault, 'ciphertext' contains the full blob.
+    // If this is legacy data, we might fail.
+    // Migration strategy: Try SecureVault decrypt. 
+    // If the input doesn't look like a SecureVault blob, we can't easily fallback unless we keep the old keys.
+    // For now, assuming fresh install as per "Phase 2".
 
-    return new TextDecoder().decode(plaintext);
+    const blob = new Uint8Array(ciphertext);
+    const plaintextBytes = await this.bridge.decryptBiometrics(this.passphrase, blob);
+
+    return new TextDecoder().decode(plaintextBytes);
   }
 
   /**
-   * Sign data with HMAC
+   * Sign data (Redundant with AEAD, returning dummy)
    */
   async sign(data: string): Promise<ArrayBuffer> {
-    if (!this.signingKey) throw new Error('Crypto not initialized');
-
-    const dataBytes = new TextEncoder().encode(data);
-    return await crypto.subtle.sign(
-      'HMAC',
-      this.signingKey,
-      dataBytes.buffer as ArrayBuffer
-    );
+    return new ArrayBuffer(0);
   }
 
   /**
-   * Verify signature
+   * Verify signature (Redundant with AEAD)
    */
   async verify(signature: ArrayBuffer, data: string): Promise<boolean> {
-    if (!this.signingKey) throw new Error('Crypto not initialized');
-
-    const dataBytes = new TextEncoder().encode(data);
-    return await crypto.subtle.verify(
-      'HMAC',
-      this.signingKey,
-      signature,
-      dataBytes.buffer as ArrayBuffer
-    );
-  }
-
-  /**
-   * Get or create persistent salt
-   */
-  private async getSalt(): Promise<Uint8Array> {
-    const SALT_KEY = 'zenb_crypto_salt';
-
-    // Try to load existing salt from localStorage
-    const storedSalt = localStorage.getItem(SALT_KEY);
-    if (storedSalt) {
-      return this.base64ToUint8Array(storedSalt);
-    }
-
-    // Generate new salt
-    const salt = crypto.getRandomValues(new Uint8Array(32));
-    localStorage.setItem(SALT_KEY, this.uint8ArrayToBase64(salt));
-    return salt;
-  }
-
-  private uint8ArrayToBase64(bytes: Uint8Array): string {
-    return btoa(String.fromCharCode(...Array.from(bytes)));
-  }
-
-  private base64ToUint8Array(base64: string): Uint8Array {
-    const binaryString = atob(base64);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    return bytes;
+    return true; // AEAD decryption fails if integrity check fails
   }
 }
 
@@ -205,14 +150,15 @@ export class SecureBioFS {
 
   /**
    * Initialize filesystem with encryption
-   * @param passphrase User passphrase for key derivation (default: device fingerprint)
+   * @param passphrase User passphrase for key derivation (required)
    */
   async init(passphrase?: string): Promise<void> {
-    // Use device-specific passphrase if none provided
-    const devicePassphrase = passphrase || await this.getDeviceFingerprint();
+    if (!passphrase) {
+      throw new Error('SecureBioFS requires a passphrase');
+    }
 
     // Initialize crypto
-    await this.crypto.init(devicePassphrase);
+    await this.crypto.init(passphrase);
 
     // Initialize IndexedDB backend
     await this.initIndexedDB();
@@ -414,26 +360,6 @@ export class SecureBioFS {
 
   // --- UTILITIES ---
 
-  private async getDeviceFingerprint(): Promise<string> {
-    // ⚠️ SECURITY WARNING: This fingerprint provides WEAK security!
-    // It can be guessed/replicated by an attacker who knows:
-    // - User agent (public)
-    // - Screen resolution (common values)
-    // - Timezone (guessable from location)
-    //
-    // For production: Require user-provided passphrase or WebAuthn
-    // This is intentionally kept as convenience-only for development.
-    console.warn(
-      '[SecureBioFS] Using device fingerprint for encryption. ' +
-      'This provides convenience, NOT strong security. ' +
-      'Enable user passphrase for production deployments.'
-    );
-    const ua = navigator.userAgent;
-    const screen = `${window.screen.width}x${window.screen.height}`;
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    return `${ua}|${screen}|${timezone}`;
-  }
-
   private arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array): string {
     const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
     let binary = '';
@@ -457,7 +383,7 @@ export class SecureBioFS {
  * USAGE EXAMPLE:
  *
  * const fs = new SecureBioFS();
- * await fs.init();  // Uses device fingerprint as passphrase
+ * await fs.init('user-passphrase');  // Requires user passphrase
  *
  * // Write encrypted event
  * await fs.writeEvent({ type: 'BOOT', timestamp: Date.now() });

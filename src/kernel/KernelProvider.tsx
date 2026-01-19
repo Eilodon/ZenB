@@ -2,7 +2,8 @@
 import React, { createContext, useContext, useRef, useEffect, useState } from 'react';
 console.log('[ZenB] Module: KernelProvider.tsx loading...');
 import { RustKernelBridge, RuntimeState } from '../services/RustKernelBridge';
-import { audioMiddleware, hapticMiddleware } from '../services/kernelMiddleware';
+import { audioMiddleware, hapticMiddleware, biofeedbackMiddleware, safetySyncMiddleware } from '../services/kernelMiddleware';
+import { loadSafetyRegistry } from '../services/safetyRegistry';
 
 const KernelContext = createContext<{ kernel: RustKernelBridge; state: RuntimeState } | null>(null);
 
@@ -13,12 +14,26 @@ export const KernelProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     kernelRef.current = new RustKernelBridge();
     kernelRef.current.use(audioMiddleware);
     kernelRef.current.use(hapticMiddleware);
+    kernelRef.current.use(biofeedbackMiddleware); // Active Inference Control
+    kernelRef.current.use(safetySyncMiddleware);  // Eidolon Split-Brain Fix
   }
 
   const [state, setState] = useState<RuntimeState>(kernelRef.current.getState());
 
   useEffect(() => {
     return kernelRef.current!.subscribe(setState);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const registry = await loadSafetyRegistry();
+      if (cancelled) return;
+      if (Object.keys(registry).length > 0) {
+        kernelRef.current!.loadSafetyRegistry(registry);
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   return (

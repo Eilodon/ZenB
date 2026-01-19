@@ -399,6 +399,25 @@ class MockZenOneRuntime {
         this.safetyLocked = false;
         this.status = 'Idle';
     }
+
+    // =========================================================================
+    // SECURE VAULT (Mock)
+    // =========================================================================
+
+    async encryptBlob(passphrase: string, data: Uint8Array): Promise<Uint8Array> {
+        console.log('[MockRuntime] Encrypting blob with passphrase:', passphrase);
+        // Mock encryption: simple XOR or just return as is with a prefix
+        const result = new Uint8Array(data.length + 4);
+        result.set([0, 0, 0, 0], 0); // Mock header
+        result.set(data, 4);
+        return result;
+    }
+
+    async decryptBlob(passphrase: string, blob: Uint8Array): Promise<Uint8Array> {
+        console.log('[MockRuntime] Decrypting blob with passphrase:', passphrase);
+        if (blob.length < 4) throw new Error('Invalid mock blob');
+        return blob.slice(4);
+    }
 }
 
 // ============================================================================
@@ -587,13 +606,28 @@ export class RustKernelBridge {
             case 'SAFETY_INTERDICTION':
                 if (event.action === 'EMERGENCY_HALT') {
                     if (this._useTauri && this.tauriRuntime) {
-                        this.tauriRuntime.emergency_halt(event.action).catch(err => {
+                        this.tauriRuntime.emergency_halt(event.action).then(() => {
+                            this.refreshFromRust('emergency_halt');
+                        }).catch(err => {
                             console.warn('[RustKernelBridge] Tauri emergency_halt failed:', err);
                             this.runtime.emergency_halt(event.action);
                         });
                     } else {
                         this.runtime.emergency_halt(event.action);
                     }
+                }
+                break;
+
+            case 'RESET_SAFETY_LOCK':
+                if (this._useTauri && this.tauriRuntime) {
+                    this.tauriRuntime.reset_safety_lock().then(() => {
+                        this.refreshFromRust('reset_safety_lock');
+                    }).catch(err => {
+                        console.warn('[RustKernelBridge] Tauri reset_safety_lock failed:', err);
+                        this.runtime.reset_safety_lock();
+                    });
+                } else {
+                    this.runtime.reset_safety_lock();
                 }
                 break;
 
@@ -738,6 +772,36 @@ export class RustKernelBridge {
         // Trim to MAX_LOG_SIZE
         if (this.eventLog.length > this.MAX_LOG_SIZE) {
             this.eventLog = this.eventLog.slice(-this.MAX_LOG_SIZE);
+        }
+    }
+
+    private refreshFromRust(reason: string): void {
+        if (!this._useTauri || !this.tauriRuntime) return;
+        this.tauriRuntime.get_state().then((rustState) => {
+            this.state = this.buildStateFromRust(rustState);
+            this.notify();
+        }).catch(err => {
+            console.warn(`[RustKernelBridge] Failed to refresh state (${reason}):`, err);
+        });
+    }
+
+    // =========================================================================
+    // SECURE VAULT API
+    // =========================================================================
+
+    async encryptBiometrics(passphrase: string, data: Uint8Array): Promise<Uint8Array> {
+        if (this._useTauri && this.tauriRuntime) {
+            return this.tauriRuntime.encryptBlob(passphrase, data);
+        } else {
+            return this.runtime.encryptBlob(passphrase, data);
+        }
+    }
+
+    async decryptBiometrics(passphrase: string, blob: Uint8Array): Promise<Uint8Array> {
+        if (this._useTauri && this.tauriRuntime) {
+            return this.tauriRuntime.decryptBlob(passphrase, blob);
+        } else {
+            return this.runtime.decryptBlob(passphrase, blob);
         }
     }
 

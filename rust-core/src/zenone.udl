@@ -302,3 +302,19 @@ interface BinauralManager {
     FfiBrainWaveState get_recommended_state(f32 arousal_target);
 };
 
+// ============================================================================
+// SECURE VAULT
+// ============================================================================
+
+interface SecureVault {
+    constructor();
+    
+    // Encrypt biometric data (Argon2id + ChaCha20Poly1305)
+    [Throws=ZenOneError]
+    sequence<u8> encrypt_blob(string passphrase, sequence<u8> data);
+    
+    // Decrypt biometric data
+    [Throws=ZenOneError]
+    sequence<u8> decrypt_blob(string passphrase, sequence<u8> blob);
+};
+

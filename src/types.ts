@@ -94,6 +94,7 @@ export type KernelEvent =
   | { type: 'RESUME'; timestamp: number }
   | { type: 'HALT'; reason: string; timestamp: number }
   | { type: 'SAFETY_INTERDICTION'; riskLevel: number; action: string; timestamp: number }
+  | { type: 'RESET_SAFETY_LOCK'; patternId?: string; timestamp: number }
   | { type: 'SYMPATHETIC_OVERRIDE'; fromPattern: string; toPattern: string; reason: string; timestamp: number } // NEW: Level 3 Reflex
   | { type: 'LOAD_SAFETY_REGISTRY'; registry: Record<string, SafetyProfile>; timestamp: number }
   | { type: 'ADJUST_TEMPO'; scale: number; reason: string; timestamp: number }
@@ -131,7 +132,6 @@ export type UserSettings = {
   streak: number;
   lastBreathDate: string;
   lastUsedPattern: BreathingType;
-  safetyRegistry: Record<string, SafetyProfile>;
   cameraVitalsEnabled: boolean;
   showKernelMonitor: boolean;
   aiCoachEnabled: boolean;
@@ -140,6 +140,7 @@ export type UserSettings = {
   passphraseHash: string | null; // P1 Security Fix: SHA-256 hash for verification
   apiKey?: string;
   developerMode?: boolean;
+  safetyRegistry: Record<string, SafetyProfile>; // Added for trauma registry persistence
 };
 
 export type SessionHistoryItem = {

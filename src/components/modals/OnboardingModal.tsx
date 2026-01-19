@@ -47,7 +47,7 @@ export const OnboardingModal = ({ onComplete, t }: Props) => {
     if (passphrase) {
       await setPassphrase(passphrase);
     }
-    // null = user chose device fingerprint
+    // null = user skipped passphrase setup
     setShowPassphraseSetup(false);
     onComplete();
   };
