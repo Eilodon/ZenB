@@ -8,13 +8,74 @@ use std::time::Instant;
 
 use serde::{Serialize, Deserialize};
 
+use std::collections::HashMap;
+
 use zenb_core::{
-    breath_patterns::{builtin_patterns, BreathPattern},
-    phase_machine::{Phase, PhaseMachine},
+    phase_machine::{Phase, PhaseMachine, PhaseDurations},
     Engine,
     belief::Context,
 };
-use zenb_signals::rppg::EnsembleProcessor;
+use zenb_signals::rppg::{RppgProcessor, RppgMethod};
+
+// LOCAL DEFINITIONS (Missing from zenb-core)
+#[derive(Debug, Clone)]
+pub struct BreathTimings {
+    pub inhale: f32,
+    pub hold_in: f32,
+    pub exhale: f32,
+    pub hold_out: f32,
+}
+
+#[derive(Debug, Clone)]
+pub struct BreathPattern {
+    pub id: String,
+    pub label: String,
+    pub tag: String,
+    pub description: String,
+    pub timings: BreathTimings,
+    pub recommended_cycles: u32,
+    pub arousal_impact: f32,
+}
+
+impl BreathPattern {
+    pub fn to_phase_durations(&self) -> PhaseDurations {
+        PhaseDurations {
+            inhale_us: (self.timings.inhale * 1_000_000.0) as u64,
+            hold_in_us: (self.timings.hold_in * 1_000_000.0) as u64,
+            exhale_us: (self.timings.exhale * 1_000_000.0) as u64,
+            hold_out_us: (self.timings.hold_out * 1_000_000.0) as u64,
+        }
+    }
+}
+
+pub fn builtin_patterns() -> HashMap<String, BreathPattern> {
+    let mut m = HashMap::new();
+    m.insert(
+        "4-7-8".to_string(),
+        BreathPattern {
+            id: "4-7-8".to_string(),
+            label: "Relaxing Breath".to_string(),
+            tag: "calm".to_string(),
+            description: "Classic relaxing technique".to_string(),
+            timings: BreathTimings { inhale: 4.0, hold_in: 7.0, exhale: 8.0, hold_out: 0.0 },
+            recommended_cycles: 4,
+            arousal_impact: -0.8,
+        }
+    );
+     m.insert(
+        "box".to_string(),
+        BreathPattern {
+            id: "box".to_string(),
+            label: "Box Breathing".to_string(),
+            tag: "focus".to_string(),
+            description: "Navy SEAL focus technique".to_string(),
+            timings: BreathTimings { inhale: 4.0, hold_in: 4.0, exhale: 4.0, hold_out: 4.0 },
+            recommended_cycles: 10,
+            arousal_impact: 0.0,
+        }
+    );
+    m
+}
 
 uniffi::include_scaffolding!("zenone");
 
@@ -163,12 +224,9 @@ impl FfiBeliefState {
 
 /// Helper to extract belief from Engine's vinnana controller
 fn get_engine_belief(engine: &Engine) -> FfiBeliefState {
-    if let Some(ref state) = engine.vinnana.last_state {
-        let confidence = state.confidence;
-        FfiBeliefState::from_belief_array(&state.belief, confidence)
-    } else {
-        FfiBeliefState::default()
-    }
+    let state = &engine.skandha_pipeline.vinnana.state;
+    let confidence = state.conf;
+    FfiBeliefState::from_belief_array(&state.p, confidence)
 }
 
 /// Estimate from Engine (FFI-safe)
@@ -266,7 +324,7 @@ struct SessionState {
 struct RuntimeInner {
     engine: Engine,
     phase_machine: PhaseMachine,
-    processor: EnsembleProcessor,
+    processor: RppgProcessor,
     current_pattern_id: String,
     session: Option<SessionState>,
     last_timestamp_us: i64,
@@ -301,7 +359,7 @@ impl ZenOneRuntime {
             inner: Mutex::new(RuntimeInner {
                 engine: Engine::new(6.0), // Default BPM for phase timing
                 phase_machine: PhaseMachine::new(durations),
-                processor: EnsembleProcessor::new(),
+                processor: RppgProcessor::new(RppgMethod::Pos, 90, 30.0),
                 current_pattern_id: pattern_id,
                 session: None,
                 last_timestamp_us: 0,
@@ -374,7 +432,7 @@ impl ZenOneRuntime {
             inner.phase_machine = PhaseMachine::new(pattern.to_phase_durations());
         }
 
-        inner.processor = EnsembleProcessor::new();
+        inner.processor = RppgProcessor::new(RppgMethod::Pos, 90, 30.0);
         inner.last_timestamp_us = 0;
         inner.status = FfiRuntimeStatus::Running;
         inner.session = Some(SessionState {
@@ -473,8 +531,11 @@ impl ZenOneRuntime {
         let ppg_result = inner.processor.process();
 
         // Build sensor features for Engine
-        let hr = ppg_result.as_ref().map(|r| r.bpm);
-        let quality = ppg_result.as_ref().map(|r| r.confidence).unwrap_or(0.0);
+        let (hr, quality) = if let Some((bpm, conf)) = ppg_result {
+            (Some(bpm), conf)
+        } else {
+            (None, 0.0)
+        };
 
         // Ingest sensor data into Engine
         let features = [

@@ -1,12 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 * {
   box-sizing: border-box;
 }
 :root {
+  --sat: env(safe-area-inset-top);
+  --sab: env(safe-area-inset-bottom);
+  --sal: env(safe-area-inset-left);
+  --sar: env(safe-area-inset-right);
+
+  /* ZenB Token Map */
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --tracking-tighter: -0.05em;
+  --tracking-tight: -0.025em;
+  --tracking-wide: 0.025em;
+  --tracking-ultra: 0.3em;
+
+  /* Animation Tokens */
+  --ease-in: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-in: 150ms;
+  --dur-out: 200ms;
+
   --ui-pad-x: 24px;
   --ui-pad-y: 24px;
   --ui-max-width: 560px;
 }
+
 body {
   margin: 0;
   padding: 0;
@@ -14,6 +37,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
 /* Ensure full viewport height on mobile */
 #root {
   min-height: 100dvh;

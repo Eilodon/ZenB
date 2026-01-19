@@ -11,9 +11,9 @@ path = "lib.rs"
 
 [dependencies]
 # AGOLOS core crates (ZenB/rust-core/../../ = B.1/AGOLOS)
-zenb-core = { path = "../../AGOLOS/crates/zenb-core", features = ["vajra_void"] }
-zenb-signals = { path = "../../AGOLOS/crates/zenb-signals" }
-zenb-store = { path = "../../AGOLOS/crates/zenb-store" }
+zenb-core = { path = "../../dự phòng/AGOLOS/crates/zenb-core" }
+zenb-signals = { path = "../../dự phòng/AGOLOS/crates/zenb-signals" }
+zenb-store = { path = "../../dự phòng/AGOLOS/crates/zenb-store" }
 
 # UniFFI for cross-platform bindings
 uniffi = { version = "0.28", features = ["cli"] }

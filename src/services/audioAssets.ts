@@ -14,11 +14,11 @@ export const SOUND_PACK_ENGINES: Record<SoundPack, { engine: SoundPackEngine }> 
 export const SOUND_PACK_LIST = Object.keys(SOUND_PACK_ENGINES) as SoundPack[];
 
 export const REAL_ZEN_SAMPLE_URLS = {
-  inhale: ['/audio/real-zen/inhale_01.wav', '/audio/real-zen/inhale_02.wav', '/audio/real-zen/inhale_03.wav'],
-  exhale: ['/audio/real-zen/exhale_01.wav', '/audio/real-zen/exhale_02.wav', '/audio/real-zen/exhale_03.wav'],
-  hold: ['/audio/real-zen/hold_01.wav', '/audio/real-zen/hold_02.wav'],
-  finish: ['/audio/real-zen/finish_01.wav'],
-  ambience: '/audio/real-zen/ambience_loop.wav'
+  inhale: ['/audio/ai-generated/inhale-calm-01.mp3', '/audio/ai-generated/inhale-calm-02.mp3', '/audio/ai-generated/inhale-deep-01.mp3'],
+  exhale: ['/audio/ai-generated/exhale-calm-01.mp3', '/audio/ai-generated/exhale-deep-01.mp3'],
+  hold: ['/audio/ai-generated/hold-silence-01.mp3'],
+  finish: ['/audio/ai-generated/bell-ting-01.mp3', '/audio/ai-generated/bowl-strike-01.mp3'],
+  ambience: undefined // Ambience generation failed
 } as const;
 
 export type SoundscapeName = 'none' | 'forest' | 'ocean' | 'rain' | 'fireplace';

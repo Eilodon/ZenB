@@ -17,16 +17,18 @@ describe('audio asset catalog', () => {
 
   it('has a 1:1 manifest entry for all real-zen samples and soundscapes', () => {
     const manifestFiles = new Set(AUDIO_ASSET_MANIFEST.map((entry) => entry.file));
-    const realZenFiles = [
+
+    // Collect all real-zen files, filtering out undefined (e.g., ambience if not generated)
+    const realZenFiles: string[] = [
       ...REAL_ZEN_SAMPLE_URLS.inhale,
       ...REAL_ZEN_SAMPLE_URLS.exhale,
       ...REAL_ZEN_SAMPLE_URLS.hold,
       ...REAL_ZEN_SAMPLE_URLS.finish,
-      REAL_ZEN_SAMPLE_URLS.ambience
+      ...(REAL_ZEN_SAMPLE_URLS.ambience ? [REAL_ZEN_SAMPLE_URLS.ambience] : [])
     ];
 
     realZenFiles.forEach((file) => {
-      expect(manifestFiles.has(file)).toBe(true);
+      expect(manifestFiles.has(file), `Missing manifest entry for: ${file}`).toBe(true);
     });
 
     Object.values(SOUNDSCAPE_CONFIGS).forEach((config) => {

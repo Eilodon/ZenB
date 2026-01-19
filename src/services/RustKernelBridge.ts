@@ -474,38 +474,87 @@ export class RustKernelBridge {
                 break;
 
             case 'LOAD_PROTOCOL':
-                this.runtime.load_pattern(event.patternId);
+                if (this._useTauri && this.tauriRuntime) {
+                    this.tauriRuntime.load_pattern(event.patternId).catch(err => {
+                        console.warn('[RustKernelBridge] Tauri load_pattern failed:', err);
+                        this.runtime.load_pattern(event.patternId);
+                    });
+                } else {
+                    this.runtime.load_pattern(event.patternId);
+                }
                 break;
 
             case 'START_SESSION':
                 try {
-                    this.runtime.start_session();
+                    if (this._useTauri && this.tauriRuntime) {
+                        this.tauriRuntime.start_session().catch(err => {
+                            console.warn('[RustKernelBridge] Tauri start_session failed:', err);
+                            this.runtime.start_session();
+                        });
+                    } else {
+                        this.runtime.start_session();
+                    }
                 } catch (e) {
                     console.warn('[RustKernelBridge] Failed to start session:', e);
                 }
                 break;
 
             case 'HALT':
-                this.runtime.stop_session();
+                if (this._useTauri && this.tauriRuntime) {
+                    this.tauriRuntime.stop_session().catch(err => {
+                        console.warn('[RustKernelBridge] Tauri stop_session failed:', err);
+                        this.runtime.stop_session();
+                    });
+                } else {
+                    this.runtime.stop_session();
+                }
                 break;
 
             case 'INTERRUPTION':
                 if (event.kind === 'pause') {
-                    this.runtime.pause_session();
+                    if (this._useTauri && this.tauriRuntime) {
+                        this.tauriRuntime.pause_session().catch(err => {
+                            console.warn('[RustKernelBridge] Tauri pause_session failed:', err);
+                            this.runtime.pause_session();
+                        });
+                    } else {
+                        this.runtime.pause_session();
+                    }
                 }
                 break;
 
             case 'RESUME':
-                this.runtime.resume_session();
+                if (this._useTauri && this.tauriRuntime) {
+                    this.tauriRuntime.resume_session().catch(err => {
+                        console.warn('[RustKernelBridge] Tauri resume_session failed:', err);
+                        this.runtime.resume_session();
+                    });
+                } else {
+                    this.runtime.resume_session();
+                }
                 break;
 
             case 'ADJUST_TEMPO':
-                this.runtime.adjust_tempo(event.scale, event.reason);
+                if (this._useTauri && this.tauriRuntime) {
+                    this.tauriRuntime.adjust_tempo(event.scale, event.reason).catch(err => {
+                        console.warn('[RustKernelBridge] Tauri adjust_tempo failed:', err);
+                        this.runtime.adjust_tempo(event.scale, event.reason);
+                    });
+                } else {
+                    this.runtime.adjust_tempo(event.scale, event.reason);
+                }
                 break;
 
             case 'SAFETY_INTERDICTION':
                 if (event.action === 'EMERGENCY_HALT') {
-                    this.runtime.emergency_halt(event.action);
+                    if (this._useTauri && this.tauriRuntime) {
+                        this.tauriRuntime.emergency_halt(event.action).catch(err => {
+                            console.warn('[RustKernelBridge] Tauri emergency_halt failed:', err);
+                            this.runtime.emergency_halt(event.action);
+                        });
+                    } else {
+                        this.runtime.emergency_halt(event.action);
+                    }
                 }
                 break;
 
@@ -540,18 +589,41 @@ export class RustKernelBridge {
     }
 
     tick(dt: number, observation: Observation): void {
-        const frame = this.runtime.tick(dt, observation.timestamp * 1000);
+        // Use Tauri runtime if available, otherwise fall back to mock
+        if (this._useTauri && this.tauriRuntime) {
+            // Async call to real Rust engine
+            this.tauriRuntime.tick(dt, observation.timestamp).then(frame => {
+                this.processFrame(frame, dt, observation);
+            }).catch(err => {
+                console.warn('[RustKernelBridge] Tauri tick failed, using mock:', err);
+                const frame = this.runtime.tick(dt, observation.timestamp * 1000);
+                this.processFrame(frame, dt, observation);
+            });
+        } else {
+            // Synchronous mock fallback
+            const frame = this.runtime.tick(dt, observation.timestamp * 1000);
+            this.processFrame(frame, dt, observation);
+        }
+    }
 
+    /**
+     * Process a frame from either Rust or Mock runtime
+     */
+    private processFrame(frame: FfiFrame, dt: number, observation: Observation): void {
         // Convert frame to state update
         const beforeState = this.state;
         const sessionDuration = beforeState.status === 'RUNNING'
             ? beforeState.sessionDuration + dt
             : beforeState.sessionDuration;
 
-        // Use UKF for belief state estimation if enabled
+        // Use UKF for belief state estimation if enabled AND not using Tauri
+        // When Tauri is available, prefer Rust's native belief computation
         let belief: BeliefState;
-        if (this.useUKF && this.state.status === 'RUNNING') {
-            // Update UKF with observation
+        if (this._useTauri) {
+            // Rust computes belief directly
+            belief = ffiBeliefToBeliefState(frame.belief, frame.resonance);
+        } else if (this.useUKF && this.state.status === 'RUNNING') {
+            // Fallback: Update UKF with observation
             belief = this.ukf.update(observation, dt);
         } else {
             // Fallback to FFI belief conversion
