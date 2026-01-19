@@ -164,7 +164,7 @@ export const safetySyncMiddleware: Middleware = (event, _before, _after, api) =>
     const store = useSettingsStore.getState();
 
     // Update persistent store
-    store.resetSafetyLock(event.patternId as any);
+    store.resetSafetyLock(event.patternId);
 
     // Sync back to Kernel memory immediately
     const updatedRegistry = useSettingsStore.getState().userSettings.safetyRegistry;

@@ -42,7 +42,7 @@ import { RustKernelBridge } from './RustKernelBridge';
 class CryptoService {
   private bridge: RustKernelBridge;
   private passphrase: string | null = null;
-  private cryptoInitialized = false;
+
 
   constructor() {
     this.bridge = new RustKernelBridge();
@@ -57,7 +57,7 @@ class CryptoService {
     // We keep passphrase in JS memory (which is a risk, strictly speaking, but standard for non-Tauri)
     // Ideally, we'd push this down to Rust session entirely.
     // For Phase 2, we pass it per call.
-    this.cryptoInitialized = true;
+    // this.cryptoInitialized = true; // Removed dead code
   }
 
   /**
@@ -96,7 +96,7 @@ class CryptoService {
   /**
    * Decrypt data
    */
-  async decrypt(iv: Uint8Array, ciphertext: ArrayBuffer): Promise<string> {
+  async decrypt(_iv: Uint8Array, ciphertext: ArrayBuffer): Promise<string> {
     if (!this.passphrase) throw new Error('Crypto not initialized');
 
     // If we migrated to SecureVault, 'ciphertext' contains the full blob.
@@ -114,14 +114,14 @@ class CryptoService {
   /**
    * Sign data (Redundant with AEAD, returning dummy)
    */
-  async sign(data: string): Promise<ArrayBuffer> {
+  async sign(_data: string): Promise<ArrayBuffer> {
     return new ArrayBuffer(0);
   }
 
   /**
    * Verify signature (Redundant with AEAD)
    */
-  async verify(signature: ArrayBuffer, data: string): Promise<boolean> {
+  async verify(_signature: ArrayBuffer, _data: string): Promise<boolean> {
     return true; // AEAD decryption fails if integrity check fails
   }
 }

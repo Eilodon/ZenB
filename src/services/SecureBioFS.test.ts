@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { SecureBioFS } from './SecureBioFS';
 import { KernelEvent } from '../types';
 
@@ -40,7 +40,7 @@ describe('SecureBioFS - Event Log Rotation', () => {
 
     it('should rotate when size exceeds 10MB', async () => {
         // Create large events to exceed 10MB
-        const largePayload = 'x'.repeat(1024 * 100); // 100KB per event
+        // const _largePayload = 'x'.repeat(1024 * 100); // 100KB per event
         const eventsToCreate = 120; // ~12MB total
 
         for (let i = 0; i < eventsToCreate; i++) {
