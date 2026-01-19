@@ -58,6 +58,21 @@ export interface FfiResonance {
     rhythm_alignment: number;
 }
 
+export interface FfiPatternRecommendation {
+    pattern_id: string;
+    score: number;
+    reason: string;
+}
+
+export type FfiBrainWaveState = 'Delta' | 'Theta' | 'Alpha' | 'Beta';
+
+export interface FfiBinauralConfig {
+    base_freq: number;
+    beat_freq: number;
+    description: string;
+    benefits: string[];
+}
+
 export interface FfiSafetyStatus {
     is_locked: boolean;
     trauma_count: number;

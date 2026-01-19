@@ -1277,3 +1277,286 @@ impl SafetyMonitor {
             && runtime_state.status != FfiRuntimeStatus::SafetyLock
     }
 }
+
+// ============================================================================
+// PATTERN RECOMMENDER - AI-POWERED SUGGESTIONS
+// ============================================================================
+
+/// Time of day for recommendations
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FfiTimeOfDay {
+    Morning,
+    Afternoon,
+    Evening,
+    Night,
+}
+
+impl FfiTimeOfDay {
+    pub fn from_hour(hour: u8) -> Self {
+        match hour {
+            0..=5 => FfiTimeOfDay::Night,
+            6..=11 => FfiTimeOfDay::Morning,
+            12..=17 => FfiTimeOfDay::Afternoon,
+            18..=21 => FfiTimeOfDay::Evening,
+            _ => FfiTimeOfDay::Night,
+        }
+    }
+    
+    pub fn desired_arousal(&self) -> f32 {
+        match self {
+            FfiTimeOfDay::Morning => 0.3,    // Slightly energizing
+            FfiTimeOfDay::Afternoon => 0.0,  // Balanced
+            FfiTimeOfDay::Evening => -0.5,   // Relaxing
+            FfiTimeOfDay::Night => -0.8,     // Very sedative
+        }
+    }
+    
+    pub fn desired_goal(&self) -> &'static str {
+        match self {
+            FfiTimeOfDay::Morning => "energy",
+            FfiTimeOfDay::Afternoon => "focus",
+            FfiTimeOfDay::Evening => "stress",
+            FfiTimeOfDay::Night => "sleep",
+        }
+    }
+}
+
+/// Pattern recommendation result
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FfiPatternRecommendation {
+    pub pattern_id: String,
+    pub score: f32,
+    pub reason: String,
+}
+
+/// Pattern metadata for scoring
+struct PatternMeta {
+    id: &'static str,
+    arousal: f32,
+    complexity: u8,
+    best_for: &'static [&'static str],
+}
+
+const PATTERN_METADATA: &[PatternMeta] = &[
+    PatternMeta { id: "4-7-8", arousal: -0.8, complexity: 1, best_for: &["sleep", "stress"] },
+    PatternMeta { id: "box", arousal: 0.0, complexity: 1, best_for: &["focus", "general"] },
+    PatternMeta { id: "calm", arousal: -0.3, complexity: 1, best_for: &["general", "stress"] },
+    PatternMeta { id: "coherence", arousal: -0.5, complexity: 2, best_for: &["focus", "general"] },
+    PatternMeta { id: "deep-relax", arousal: -0.9, complexity: 1, best_for: &["stress", "sleep"] },
+    PatternMeta { id: "7-11", arousal: -1.0, complexity: 2, best_for: &["stress", "sleep"] },
+    PatternMeta { id: "awake", arousal: 0.8, complexity: 2, best_for: &["energy"] },
+    PatternMeta { id: "triangle", arousal: 0.2, complexity: 1, best_for: &["general", "focus"] },
+    PatternMeta { id: "tactical", arousal: 0.1, complexity: 2, best_for: &["focus"] },
+    PatternMeta { id: "buteyko", arousal: -0.2, complexity: 3, best_for: &["general"] },
+    PatternMeta { id: "wim-hof", arousal: 1.0, complexity: 3, best_for: &["energy"] },
+];
+
+/// Pattern Recommender - AI-powered pattern suggestions
+/// 
+/// Recommends patterns based on:
+/// - Time of day (arousal matching)
+/// - Recent session history (variety bonus)
+/// - Pattern complexity
+/// - Time-specific bonuses
+pub struct PatternRecommender {
+    inner: Mutex<PatternRecommenderInner>,
+}
+
+struct PatternRecommenderInner {
+    recent_patterns: Vec<String>,
+}
+
+impl PatternRecommender {
+    pub fn new() -> Self {
+        Self {
+            inner: Mutex::new(PatternRecommenderInner {
+                recent_patterns: Vec::new(),
+            }),
+        }
+    }
+    
+    /// Add a pattern to recent history
+    pub fn record_pattern(&self, pattern_id: String) {
+        let mut inner = self.inner.lock();
+        inner.recent_patterns.insert(0, pattern_id);
+        if inner.recent_patterns.len() > 5 {
+            inner.recent_patterns.truncate(5);
+        }
+    }
+    
+    /// Clear recent history
+    pub fn clear_history(&self) {
+        let mut inner = self.inner.lock();
+        inner.recent_patterns.clear();
+    }
+    
+    /// Get recommendations based on current time
+    pub fn recommend(&self, local_hour: u8, limit: u32) -> Vec<FfiPatternRecommendation> {
+        let inner = self.inner.lock();
+        let time_of_day = FfiTimeOfDay::from_hour(local_hour);
+        let desired_arousal = time_of_day.desired_arousal();
+        let desired_goal = time_of_day.desired_goal();
+        
+        let mut scored: Vec<FfiPatternRecommendation> = PATTERN_METADATA.iter().map(|pattern| {
+            let mut score: f32 = 0.0;
+            let mut reasons: Vec<&str> = Vec::new();
+            
+            // Arousal match (0-40 points)
+            let arousal_diff = (pattern.arousal - desired_arousal).abs();
+            let arousal_score = (40.0 - arousal_diff * 30.0).max(0.0);
+            score += arousal_score;
+            
+            // Goal match (0-30 points)
+            if pattern.best_for.contains(&desired_goal) {
+                score += 30.0;
+                reasons.push(match desired_goal {
+                    "sleep" => "Great for sleep",
+                    "focus" => "Great for focus",
+                    "stress" => "Great for stress relief",
+                    "energy" => "Great for energy",
+                    _ => "Recommended for you",
+                });
+            }
+            
+            // Variety bonus (0-20 points)
+            let times_recent = inner.recent_patterns.iter()
+                .filter(|p| p.as_str() == pattern.id)
+                .count() as f32;
+            let variety_score = (20.0 - times_recent * 10.0).max(0.0);
+            score += variety_score;
+            if times_recent == 0.0 {
+                reasons.push("Try something new");
+            }
+            
+            // Complexity consideration (0-10 points)
+            score += (4 - pattern.complexity) as f32 * 3.0;
+            
+            // Time-specific bonuses
+            match (time_of_day, pattern.id) {
+                (FfiTimeOfDay::Morning, "awake") => {
+                    score += 15.0;
+                    reasons.insert(0, "Perfect for morning energy");
+                }
+                (FfiTimeOfDay::Night, "4-7-8") => {
+                    score += 15.0;
+                    reasons.insert(0, "Ideal for sleep");
+                }
+                (FfiTimeOfDay::Afternoon, "box") => {
+                    score += 10.0;
+                    reasons.insert(0, "Great for afternoon focus");
+                }
+                _ => {}
+            }
+            
+            let reason = reasons.first().copied().unwrap_or("Recommended for you").to_string();
+            
+            FfiPatternRecommendation {
+                pattern_id: pattern.id.to_string(),
+                score,
+                reason,
+            }
+        }).collect();
+        
+        // Sort by score descending
+        scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        
+        // Return top N
+        scored.truncate(limit as usize);
+        scored
+    }
+    
+    /// Get top recommendation with explanation
+    pub fn top_recommendation(&self, local_hour: u8) -> Option<FfiPatternRecommendation> {
+        self.recommend(local_hour, 1).into_iter().next()
+    }
+}
+
+// ============================================================================
+// BINAURAL BEATS ENGINE (PARTIAL MIGRATION)
+// ============================================================================
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FfiBrainWaveState {
+    Delta,
+    Theta,
+    Alpha,
+    Beta,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FfiBinauralConfig {
+    pub base_freq: f32,
+    pub beat_freq: f32,
+    pub description: String,
+    pub benefits: Vec<String>,
+}
+
+pub struct BinauralManager;
+
+impl BinauralManager {
+    pub fn new() -> Self {
+        Self
+    }
+
+    pub fn get_config(&self, state: FfiBrainWaveState) -> FfiBinauralConfig {
+        match state {
+            FfiBrainWaveState::Delta => FfiBinauralConfig {
+                base_freq: 200.0,
+                beat_freq: 2.5,
+                description: "Deep Sleep & Healing".to_string(),
+                benefits: vec![
+                    "Deep restorative sleep".to_string(),
+                    "Physical healing".to_string(),
+                    "Pain relief".to_string(),
+                    "Immune boost".to_string()
+                ],
+            },
+            FfiBrainWaveState::Theta => FfiBinauralConfig {
+                base_freq: 200.0,
+                beat_freq: 6.0,
+                description: "Meditation & Creativity".to_string(),
+                benefits: vec![
+                    "Deep meditation".to_string(),
+                    "Creative insights".to_string(),
+                    "Emotional healing".to_string(),
+                    "Vivid imagery".to_string()
+                ],
+            },
+            FfiBrainWaveState::Alpha => FfiBinauralConfig {
+                base_freq: 200.0,
+                beat_freq: 10.0,
+                description: "Relaxed Focus".to_string(),
+                benefits: vec![
+                    "Calm awareness".to_string(),
+                    "Stress reduction".to_string(),
+                    "Peak performance".to_string(),
+                    "Learning enhancement".to_string()
+                ],
+            },
+            FfiBrainWaveState::Beta => FfiBinauralConfig {
+                base_freq: 220.0,
+                beat_freq: 18.0,
+                description: "Active Thinking".to_string(),
+                benefits: vec![
+                    "Mental clarity".to_string(),
+                    "Problem solving".to_string(),
+                    "Concentration".to_string(),
+                    "Energy boost".to_string()
+                ],
+            },
+        }
+    }
+    
+    pub fn get_recommended_state(&self, arousal_target: f32) -> FfiBrainWaveState {
+        if arousal_target < 0.2 {
+            FfiBrainWaveState::Delta
+        } else if arousal_target < 0.4 {
+            FfiBrainWaveState::Theta
+        } else if arousal_target < 0.7 {
+            FfiBrainWaveState::Alpha
+        } else {
+            FfiBrainWaveState::Beta
+        }
+    }
+}
+

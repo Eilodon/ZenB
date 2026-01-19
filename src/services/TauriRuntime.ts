@@ -20,6 +20,9 @@ import type {
     FfiRuntimeState,
     FfiBeliefState,
     FfiSafetyStatus,
+    FfiBrainWaveState,
+    FfiBinauralConfig,
+    FfiPatternRecommendation,
 } from './RustKernelBridge';
 
 let invokeFunc: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
@@ -268,6 +271,58 @@ export class TauriZenOneRuntime {
     async isSystemSafe(): Promise<boolean> {
         if (!invokeFunc) throw new Error('Tauri not initialized');
         return invokeFunc('is_system_safe') as Promise<boolean>;
+    }
+
+    // =========================================================================
+    // PID CONTROLLER COMMANDS
+    // =========================================================================
+
+    async pidCompute(error: number, dt: number): Promise<number> {
+        if (!invokeFunc) throw new Error('Tauri not initialized');
+        return invokeFunc('pid_compute', { error, dt }) as Promise<number>;
+    }
+
+    async pidReset(): Promise<void> {
+        if (!invokeFunc) throw new Error('Tauri not initialized');
+        await invokeFunc('pid_reset');
+    }
+
+    async pidGetDiagnostics(): Promise<unknown> {
+        if (!invokeFunc) throw new Error('Tauri not initialized');
+        return invokeFunc('pid_get_diagnostics') as Promise<unknown>;
+    }
+
+    // =========================================================================
+    // PATTERN RECOMMENDER COMMANDS
+    // =========================================================================
+
+    async recommendPatterns(localHour: number, limit: number): Promise<FfiPatternRecommendation[]> {
+        if (!invokeFunc) throw new Error('Tauri not initialized');
+        return invokeFunc('recommend_patterns', { localHour, limit }) as Promise<FfiPatternRecommendation[]>;
+    }
+
+    async recordPatternUsage(patternId: string): Promise<void> {
+        if (!invokeFunc) throw new Error('Tauri not initialized');
+        await invokeFunc('record_pattern_usage', { patternId });
+    }
+
+    async clearPatternHistory(): Promise<void> {
+        if (!invokeFunc) throw new Error('Tauri not initialized');
+        await invokeFunc('clear_pattern_history');
+    }
+
+    // =========================================================================
+    // BINAURAL BEATS COMMANDS
+    // =========================================================================
+
+    async getBinauralConfig(state: FfiBrainWaveState): Promise<FfiBinauralConfig> {
+        if (!invokeFunc) throw new Error('Tauri not initialized');
+        return invokeFunc('get_binaural_config', { brainWave: state }) as Promise<FfiBinauralConfig>;
+    }
+
+    async getBinauralRecommendation(arousalTarget: number): Promise<FfiBrainWaveState> {
+        if (!invokeFunc) throw new Error('Tauri not initialized');
+        return invokeFunc('get_binaural_recommendation', { arousalTarget }) as Promise<FfiBrainWaveState>;
     }
 }
 

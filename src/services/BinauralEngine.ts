@@ -18,6 +18,8 @@
  */
 
 import * as Tone from 'tone';
+import { getTauriRuntime, isTauriAvailable } from './TauriRuntime';
+import { FfiBrainWaveState } from './RustKernelBridge';
 
 export type BrainWaveState = 'delta' | 'theta' | 'alpha' | 'beta';
 
@@ -28,6 +30,9 @@ type BinauralConfig = {
   benefits: string[];
 };
 
+/**
+ * @deprecated Static configs are now a fallback. Primary source is Rust core.
+ */
 const BINAURAL_CONFIGS: Record<BrainWaveState, BinauralConfig> = {
   delta: {
     baseFreq: 200,
@@ -61,9 +66,31 @@ export class BinauralEngine {
   private leftGain: Tone.Gain | null = null;
   private rightGain: Tone.Gain | null = null;
   private merger: Tone.Merge | null = null;
+  private masterVolume: Tone.Gain | null = null;
+
   private currentState: BrainWaveState = 'theta';
   private isActive = false;
-  private masterVolume: Tone.Gain | null = null;
+
+  /**
+   * Helper to get config from Rust if available, else fallback
+   */
+  private async getConfig(state: BrainWaveState): Promise<BinauralConfig> {
+    if (isTauriAvailable()) {
+      try {
+        const rustState = (state.charAt(0).toUpperCase() + state.slice(1)) as FfiBrainWaveState;
+        const config = await getTauriRuntime().getBinauralConfig(rustState);
+        return {
+          baseFreq: config.base_freq,
+          beatFreq: config.beat_freq,
+          description: config.description,
+          benefits: config.benefits
+        };
+      } catch (e) {
+        console.warn('Failed to fetch binaural config from Rust, falling back:', e);
+      }
+    }
+    return BINAURAL_CONFIGS[state];
+  }
 
   /**
    * Initialize binaural beat oscillators
@@ -121,7 +148,7 @@ export class BinauralEngine {
 
     await Tone.start(); // Ensure audio context
 
-    const config = BINAURAL_CONFIGS[state];
+    const config = await this.getConfig(state);
 
     // Set frequencies
     this.leftOsc!.frequency.value = config.baseFreq;
@@ -168,10 +195,10 @@ export class BinauralEngine {
    * @param newState - Target state
    * @param transitionTime - Transition duration in seconds (default: 4s)
    */
-  setState(newState: BrainWaveState, transitionTime = 4.0): void {
+  async setState(newState: BrainWaveState, transitionTime = 4.0): Promise<void> {
     if (!this.isActive || !this.leftOsc || !this.rightOsc) return;
 
-    const config = BINAURAL_CONFIGS[newState];
+    const config = await this.getConfig(newState);
 
     // Smoothly transition frequencies
     this.leftOsc.frequency.rampTo(config.baseFreq, transitionTime);

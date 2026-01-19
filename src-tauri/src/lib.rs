@@ -3,9 +3,9 @@
 mod commands;
 
 use std::sync::Mutex;
-use commands::{RuntimeState, SafetyMonitorState, PidControllerState};
+use commands::{RuntimeState, SafetyMonitorState, PidControllerState, RecommenderState, BinauralState};
 use tauri::Manager;
-use zenone_ffi::{ZenOneRuntime, SafetyMonitor, PidController};
+use zenone_ffi::{ZenOneRuntime, SafetyMonitor, PidController, PatternRecommender, BinauralManager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -13,6 +13,8 @@ pub fn run() {
         .manage(RuntimeState(Mutex::new(ZenOneRuntime::new())))
         .manage(SafetyMonitorState(Mutex::new(SafetyMonitor::new())))
         .manage(PidControllerState(Mutex::new(PidController::new())))
+        .manage(RecommenderState(Mutex::new(PatternRecommender::new())))
+        .manage(BinauralState(Mutex::new(BinauralManager::new())))
         .invoke_handler(tauri::generate_handler![
             // Pattern commands
             commands::get_patterns,
@@ -46,6 +48,13 @@ pub fn run() {
             commands::pid_compute,
             commands::pid_reset,
             commands::pid_get_diagnostics,
+            // Pattern Recommender commands
+            commands::recommend_patterns,
+            commands::record_pattern_usage,
+            commands::clear_pattern_history,
+            // Binaural commands
+            commands::get_binaural_config,
+            commands::get_binaural_recommendation,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

@@ -241,3 +241,64 @@ interface PidController {
     void set_gains(f32? kp, f32? ki, f32? kd);
 };
 
+// ============================================================================
+// PATTERN RECOMMENDER
+// ============================================================================
+
+enum FfiTimeOfDay {
+    "Morning",
+    "Afternoon",
+    "Evening",
+    "Night",
+};
+
+dictionary FfiPatternRecommendation {
+    string pattern_id;
+    f32 score;
+    string reason;
+};
+
+interface PatternRecommender {
+    constructor();
+    
+    // Get recommendations for current time
+    sequence<FfiPatternRecommendation> recommend(u8 local_hour, u32 limit);
+    
+    // Get top recommendation
+    FfiPatternRecommendation? top_recommendation(u8 local_hour);
+    
+    // Record pattern usage for variety scoring
+    void record_pattern(string pattern_id);
+    
+    // Clear history
+    void clear_history();
+};
+
+// ============================================================================
+// BINAURAL BEATS ENGINE
+// ============================================================================
+
+enum FfiBrainWaveState {
+    "Delta",
+    "Theta",
+    "Alpha",
+    "Beta",
+};
+
+dictionary FfiBinauralConfig {
+    f32 base_freq;
+    f32 beat_freq;
+    string description;
+    sequence<string> benefits;
+};
+
+interface BinauralManager {
+    constructor();
+    
+    // Get configuration for a brain wave state
+    FfiBinauralConfig get_config(FfiBrainWaveState state);
+
+    // Get recommended state based on arousal target
+    FfiBrainWaveState get_recommended_state(f32 arousal_target);
+};
+

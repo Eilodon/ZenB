@@ -1,6 +1,15 @@
 /**
  * Pattern Recommender - AI-powered pattern suggestions
  * 
+ * @deprecated This TypeScript implementation is now a FALLBACK only.
+ * The primary PatternRecommender is implemented in Rust (rust-core/lib.rs)
+ * and is available via Tauri commands:
+ * - recommend_patterns(local_hour, limit)
+ * - record_pattern_usage(pattern_id)
+ * - clear_pattern_history()
+ * 
+ * This TypeScript version is kept for Web/PWA environments.
+ * 
  * Recommends breathing patterns based on:
  * - Time of day
  * - Recent session history

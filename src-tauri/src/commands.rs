@@ -258,3 +258,69 @@ pub fn pid_get_diagnostics(state: State<PidControllerState>) -> FfiPidDiagnostic
     let pid = state.0.lock().unwrap();
     pid.get_diagnostics()
 }
+
+// ============================================================================
+// PATTERN RECOMMENDER COMMANDS
+// ============================================================================
+
+use zenone_ffi::{PatternRecommender, FfiPatternRecommendation};
+
+/// Global Pattern Recommender (singleton)
+pub struct RecommenderState(pub StdMutex<PatternRecommender>);
+
+/// Get breathing pattern recommendations.
+#[tauri::command]
+pub fn recommend_patterns(
+    state: State<RecommenderState>,
+    local_hour: u8,
+    limit: u32,
+) -> Vec<FfiPatternRecommendation> {
+    let recommender = state.0.lock().unwrap();
+    recommender.recommend(local_hour, limit)
+}
+
+/// Record pattern usage (for variety scoring).
+#[tauri::command]
+pub fn record_pattern_usage(
+    state: State<RecommenderState>,
+    pattern_id: String,
+) {
+    let recommender = state.0.lock().unwrap();
+    recommender.record_pattern(pattern_id);
+}
+
+/// Clear pattern history.
+#[tauri::command]
+pub fn clear_pattern_history(state: State<RecommenderState>) {
+    let recommender = state.0.lock().unwrap();
+    recommender.clear_history();
+}
+
+// ============================================================================
+// BINAURAL BEATS COMMANDS
+// ============================================================================
+
+use zenone_ffi::{BinauralManager, FfiBrainWaveState, FfiBinauralConfig};
+
+/// Global Binaural Manager (singleton)
+pub struct BinauralState(pub StdMutex<BinauralManager>);
+
+/// Get configuration for a brain wave state
+#[tauri::command]
+pub fn get_binaural_config(
+    state: State<BinauralState>,
+    brain_wave: FfiBrainWaveState,
+) -> FfiBinauralConfig {
+    let manager = state.0.lock().unwrap();
+    manager.get_config(brain_wave)
+}
+
+/// Get recommended brain wave state
+#[tauri::command]
+pub fn get_binaural_recommendation(
+    state: State<BinauralState>,
+    arousal_target: f32,
+) -> FfiBrainWaveState {
+    let manager = state.0.lock().unwrap();
+    manager.get_recommended_state(arousal_target)
+}

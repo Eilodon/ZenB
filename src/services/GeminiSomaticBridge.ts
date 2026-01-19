@@ -162,7 +162,7 @@ export class GeminiSomaticBridge {
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         config: {
           tools: tools,
-          systemInstruction: SYSTEM_INSTRUCTION,
+          systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
           responseModalities: [Modality.AUDIO],
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } }
