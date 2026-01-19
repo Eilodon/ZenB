@@ -223,3 +223,38 @@ pub fn is_system_safe(
     let state = runtime.get_state();
     safety.is_safe(state)
 }
+
+// ============================================================================
+// PID CONTROLLER COMMANDS
+// ============================================================================
+
+use zenone_ffi::{PidController, FfiPidDiagnostics};
+use std::sync::Mutex as StdMutex;
+
+/// Global PID Controller for tempo adjustment (singleton)
+pub struct PidControllerState(pub StdMutex<PidController>);
+
+/// Compute PID output for tempo control.
+#[tauri::command]
+pub fn pid_compute(
+    state: State<PidControllerState>,
+    error: f32,
+    dt: f32,
+) -> f32 {
+    let pid = state.0.lock().unwrap();
+    pid.compute(error, dt)
+}
+
+/// Reset PID controller state.
+#[tauri::command]
+pub fn pid_reset(state: State<PidControllerState>) {
+    let pid = state.0.lock().unwrap();
+    pid.reset();
+}
+
+/// Get PID diagnostics.
+#[tauri::command]
+pub fn pid_get_diagnostics(state: State<PidControllerState>) -> FfiPidDiagnostics {
+    let pid = state.0.lock().unwrap();
+    pid.get_diagnostics()
+}

@@ -202,3 +202,42 @@ interface SafetyMonitor {
     // Check if system is in safe state
     boolean is_safe(FfiRuntimeState runtime_state);
 };
+
+// ============================================================================
+// PID CONTROLLER
+// ============================================================================
+
+dictionary FfiPidConfig {
+    f32 kp;
+    f32 ki;
+    f32 kd;
+    f32 integral_max;
+    f32 output_min;
+    f32 output_max;
+    f32 derivative_alpha;
+};
+
+dictionary FfiPidDiagnostics {
+    f32 p_term;
+    f32 i_term;
+    f32 d_term;
+    f32 integral;
+    f32 total;
+};
+
+interface PidController {
+    constructor();
+    
+    // Compute control output
+    f32 compute(f32 error, f32 dt);
+    
+    // Reset state
+    void reset();
+    
+    // Get diagnostics
+    FfiPidDiagnostics get_diagnostics();
+    
+    // Update gains
+    void set_gains(f32? kp, f32? ki, f32? kd);
+};
+

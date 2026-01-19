@@ -6,11 +6,16 @@ import { AffectiveState } from '../types';
 import { PhysFormerRPPG } from './ml/PhysFormerRPPG';
 import { EmoNetAffectRecognizer } from './ml/EmoNetAffectRecognizer';
 
+// Tauri integration for Rust rPPG processing
+import { isTauriAvailable, getTauriRuntime, initTauriInvoke } from './TauriRuntime';
+import type { TauriZenOneRuntime } from './TauriRuntime';
+
 // VITALS DOMAIN
 import { ZenVitalsSnapshot, Metric, QualityReport } from '../vitals/snapshot';
 import { TimeWindowBuffer } from '../vitals/ringBuffer';
 import { computeQualityGate, DEFAULT_GATE_CONFIG } from '../vitals/qualityGate';
 import { ReasonCode } from '../vitals/reasons';
+
 
 /**
  * ZENB BIO-SIGNAL PIPELINE v7.0 (Quality Gated)
@@ -62,12 +67,34 @@ export class CameraVitalsEngine {
     private isSimulated = false;
     private simGenerator: (() => ZenVitalsSnapshot) | null = null;
 
+    // --- TAURI / RUST rPPG ---
+    private tauriRuntime: TauriZenOneRuntime | null = null;
+    private useRustRppg = false;
+    private lastRustHr: { bpm: number; quality: number } | null = null;
+
     constructor() {
         this.canvas = new OffscreenCanvas(32, 32);
         this.ctx = this.canvas.getContext('2d', { willReadFrequently: true })!;
         this.physFormer = new PhysFormerRPPG();
         this.emoNet = new EmoNetAffectRecognizer();
+
+        // Initialize Tauri for Rust rPPG (async)
+        this.initRustRppg();
     }
+
+    private async initRustRppg(): Promise<void> {
+        try {
+            const available = await initTauriInvoke();
+            if (available && isTauriAvailable()) {
+                this.tauriRuntime = getTauriRuntime();
+                this.useRustRppg = true;
+                console.log('[CameraEngine] Rust rPPG enabled via Tauri');
+            }
+        } catch (e) {
+            console.warn('[CameraEngine] Rust rPPG not available:', e);
+        }
+    }
+
 
     // --- HOLODECK HOOKS ---
     public setSimulationMode(enabled: boolean, generator?: () => ZenVitalsSnapshot) {
@@ -189,16 +216,32 @@ export class CameraVitalsEngine {
         const valence = this.calculateGeometricValence(keypoints);
         this.valenceSmoother = this.valenceSmoother * 0.9 + valence * 0.1;
 
-        // 5. ASYNC WORKER PROCESSING
+        // 5. ASYNC PROCESSING (Rust rPPG preferred, fallback to TypeScript worker)
         if (this.rgbBufHR.size() > 64 && !this.isProcessing) {
+            // Option A: Rust rPPG via Tauri (native performance)
+            if (this.useRustRppg && this.tauriRuntime) {
+                const timestampUs = Math.round(nowMs * 1000); // ms -> us
+                // Fire-and-forget async call to Rust (non-blocking)
+                this.tauriRuntime.process_frame(
+                    fusedColor.r, fusedColor.g, fusedColor.b, timestampUs
+                ).then(frame => {
+                    if (frame.heart_rate !== null) {
+                        this.lastRustHr = { bpm: frame.heart_rate, quality: frame.signal_quality };
+                    }
+                }).catch(err => {
+                    console.warn('[CameraEngine] Rust process_frame failed:', err);
+                });
+            }
+
+            // Option B: TypeScript FFT Worker (fallback)
             const samples = this.rgbBufHR.samples().map(s => ({ ...s.v, timestamp: s.tMs }));
             this.triggerWorker(samples, motion, 30);
         }
 
         // 6. COMPOSE SNAPSHOT
 
-        // HR Check
-        let hrValue: number | undefined = this.lastWorkerResult?.heartRate;
+        // HR Check (prefer Rust result if available)
+        let hrValue: number | undefined = this.lastRustHr?.bpm ?? this.lastWorkerResult?.heartRate;
         const hrSpan = this.rgbBufHR.spanSec();
         const hrReasons = [...qualityMetric.reasons];
         if (hrSpan < 12) {

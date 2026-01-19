@@ -1,6 +1,16 @@
 /**
  * ENHANCED rPPG PROCESSOR v2.0
  * ============================
+ * 
+ * @deprecated This TypeScript implementation is now a FALLBACK only.
+ * The primary rPPG processing is done in Rust (zenb-signals::rppg::RppgProcessor)
+ * via the Tauri process_frame command. This TypeScript version is kept for:
+ * - Web/PWA environments without Rust backend
+ * - Development/testing when Tauri is not running
+ * 
+ * CameraVitalsEngine.v2.ts now calls Rust process_frame when Tauri is available,
+ * with this TypeScript worker as fallback.
+ *
  * SOTA Implementations:
  * - CHROM (Chrominance-based rPPG) - De Haan & Jeanne (2013)
  * - POS (Plane-Orthogonal-to-Skin) - Wang et al. (2017)

@@ -1,6 +1,17 @@
 /**
  * PID CONTROLLER - UPGRADE FROM PROPORTIONAL-ONLY
  * ================================================
+ * 
+ * @deprecated This TypeScript implementation is now a FALLBACK only.
+ * The primary PID controller is implemented in Rust (rust-core/lib.rs::PidController)
+ * and is used when Tauri runtime is available. This TypeScript version is kept for:
+ * - Web/PWA environments without Rust backend
+ * - Development/testing when Tauri is not running
+ * 
+ * For production on desktop/mobile, prefer the Rust PidController via:
+ * - TauriRuntime.pidCompute(error, dt)
+ * - TauriRuntime.pidReset()
+ * - TauriRuntime.pidGetDiagnostics()
  *
  * Implements a PID (Proportional-Integral-Derivative) controller with:
  * - Anti-windup protection (prevents integral saturation)

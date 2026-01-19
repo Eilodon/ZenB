@@ -3,15 +3,16 @@
 mod commands;
 
 use std::sync::Mutex;
-use commands::{RuntimeState, SafetyMonitorState};
+use commands::{RuntimeState, SafetyMonitorState, PidControllerState};
 use tauri::Manager;
-use zenone_ffi::{ZenOneRuntime, SafetyMonitor};
+use zenone_ffi::{ZenOneRuntime, SafetyMonitor, PidController};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(RuntimeState(Mutex::new(ZenOneRuntime::new())))
         .manage(SafetyMonitorState(Mutex::new(SafetyMonitor::new())))
+        .manage(PidControllerState(Mutex::new(PidController::new())))
         .invoke_handler(tauri::generate_handler![
             // Pattern commands
             commands::get_patterns,
@@ -41,6 +42,10 @@ pub fn run() {
             commands::get_recent_safety_violations,
             commands::clear_safety_violations,
             commands::is_system_safe,
+            // PID Controller commands
+            commands::pid_compute,
+            commands::pid_reset,
+            commands::pid_get_diagnostics,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {
