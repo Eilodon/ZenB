@@ -35,6 +35,8 @@ type SettingsState = {
   resetSafetyLock: (patternId: BreathingType) => void;
   toggleAiCoach: () => void; // v6.0
   toggleCoaching: () => void; // v6.1 In-session coaching
+  setPassphrase: (passphrase: string) => Promise<void>; // P1 Security Fix
+  clearPassphrase: () => void; // P1 Security Fix
 
   // Logic
   registerSessionComplete: (durationSec: number, patternId: BreathingType, cycles: number, finalBelief: BeliefState) => void;
@@ -71,7 +73,9 @@ export const useSettingsStore = create<SettingsState>()(
         cameraVitalsEnabled: false,
         showKernelMonitor: false,
         aiCoachEnabled: false, // v6.0 Default
-        coachingEnabled: true  // In-session coaching messages enabled by default
+        coachingEnabled: true,  // In-session coaching messages enabled by default
+        hasPassphrase: false,  // P1 Security Fix: User passphrase for encryption
+        passphraseHash: null   // SHA-256 hash for verification only (not for encryption)
       },
       history: [],
       hasSeenOnboarding: false,
@@ -92,6 +96,39 @@ export const useSettingsStore = create<SettingsState>()(
       toggleKernelMonitor: () => set((s) => ({ userSettings: { ...s.userSettings, showKernelMonitor: !s.userSettings.showKernelMonitor } })),
       toggleAiCoach: () => set((s) => ({ userSettings: { ...s.userSettings, aiCoachEnabled: !s.userSettings.aiCoachEnabled } })),
       toggleCoaching: () => set((s) => ({ userSettings: { ...s.userSettings, coachingEnabled: !s.userSettings.coachingEnabled } })),
+
+      // P1 Security Fix: Passphrase Management
+      setPassphrase: async (passphrase: string) => {
+        // Hash passphrase for verification (NOT for encryption)
+        const encoder = new TextEncoder();
+        const data = encoder.encode(passphrase);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+        set((s) => ({
+          userSettings: {
+            ...s.userSettings,
+            hasPassphrase: true,
+            passphraseHash: hashHex
+          }
+        }));
+
+        // Store passphrase in sessionStorage (cleared on tab close)
+        // This is used by SecureBioFS.init()
+        sessionStorage.setItem('zenb_passphrase', passphrase);
+      },
+
+      clearPassphrase: () => {
+        set((s) => ({
+          userSettings: {
+            ...s.userSettings,
+            hasPassphrase: false,
+            passphraseHash: null
+          }
+        }));
+        sessionStorage.removeItem('zenb_passphrase');
+      },
 
       resetSafetyLock: (patternId) => set((state) => {
         const registry = { ...state.userSettings.safetyRegistry };

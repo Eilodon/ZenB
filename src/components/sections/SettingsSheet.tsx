@@ -14,6 +14,8 @@ import { GestureBottomSheet } from '../../design-system';
 import { HolodeckOverlay } from '../HolodeckOverlay';
 import { useWearable, WEARABLE_PROVIDERS, WearableProvider } from '../../services/WearableService';
 import { VitalsDashboard } from './VitalsDashboard';
+import { SecuritySection } from './SecuritySection';
+
 
 // Access window.aistudio via helper
 const getAIStudio = () => (window as any).aistudio as {
@@ -139,6 +141,9 @@ export function SettingsSheet() {
           {/* Camera Vitals Dashboard */}
           <VitalsDashboard />
 
+          {/* Security & Privacy */}
+          <SecuritySection triggerHaptic={triggerHaptic} />
+
           <section>
             <div className="text-white/30 font-caps text-[9px] tracking-[0.2em] mb-4 flex items-center gap-2 pl-1">{t.settings.visuals}</div>
             <div className="space-y-3">
@@ -177,35 +182,60 @@ export function SettingsSheet() {
 
           <WearableSection triggerHaptic={triggerHaptic} />
 
-          <section>
-            <div className="text-white/30 font-caps text-[9px] tracking-[0.2em] mb-4 flex items-center gap-2 pl-1">Advanced Intelligence</div>
-            <div className="space-y-3">
-              <label className="flex items-center justify-between p-5 bg-gradient-to-r from-purple-500/10 to-blue-500/10 rounded-[1.5rem] border border-white/10 cursor-pointer hover:border-white/20 transition-colors">
-                <div>
-                  <div className="text-sm font-bold text-white flex items-center gap-2"><Sparkles size={14} className="text-purple-400" />Gemini Neuro-Somatic AI</div>
-                  <div className="text-[10px] text-white/50 mt-1 max-w-[200px]">Real-time voice coaching & adaptive protocol generation.</div>
-                  <div className="flex gap-2 mt-2">
-                    <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[9px] text-white/30 hover:text-white/60" onClick={(e) => e.stopPropagation()}>Pricing Info <ExternalLink size={8} /></a>
-                  </div>
-                </div>
-                <div className={clsx("w-11 h-6 rounded-full relative transition-colors border border-white/10", userSettings.aiCoachEnabled ? "bg-purple-500" : "bg-white/10")}>
-                  <input type="checkbox" checked={userSettings.aiCoachEnabled} onChange={handleAiToggle} className="sr-only" />
-                  <div className={clsx("absolute top-1 left-1 w-4 h-4 rounded-full shadow-sm transition-transform bg-white", userSettings.aiCoachEnabled ? "translate-x-5" : "translate-x-0")} />
-                </div>
-              </label>
+          <span className="text-sm font-light text-white/80">{t.settings.reduceMotion}</span>
+          <div className={clsx("w-11 h-6 rounded-full relative transition-colors border border-white/10", userSettings.reduceMotion ? "bg-white" : "bg-white/10")}>
+            <input type="checkbox" checked={userSettings.reduceMotion} onChange={(e) => { triggerHaptic(); setReduceMotion(e.target.checked); }} className="sr-only" />
+            <div className={clsx("absolute top-1 left-1 w-4 h-4 rounded-full shadow-sm transition-transform", userSettings.reduceMotion ? "bg-black translate-x-5" : "bg-white/50 translate-x-0")} />
+          </div>
+        </label>
+        <label className="flex items-center justify-between p-5 bg-white/[0.02] rounded-[1.5rem] border border-white/5 cursor-pointer hover:bg-white/[0.04] transition-colors">
+          <span className="text-sm font-light text-white/80">{t.settings.showTimer}</span>
+          <div className={clsx("w-11 h-6 rounded-full relative transition-colors border border-white/10", userSettings.showTimer ? "bg-white" : "bg-white/10")}>
+            <input type="checkbox" checked={userSettings.showTimer} onChange={(_e) => { triggerHaptic(); toggleTimer(); }} className="sr-only" />
+            <div className={clsx("absolute top-1 left-1 w-4 h-4 rounded-full shadow-sm transition-transform", userSettings.showTimer ? "bg-black translate-x-5" : "bg-white/50 translate-x-0")} />
+          </div>
+        </label>
+        <label className="flex items-center justify-between p-5 bg-white/[0.02] rounded-[1.5rem] border border-white/5 cursor-pointer hover:bg-white/[0.04] transition-colors">
+          <div><div className="text-sm font-light text-white/80">Bio-Sensors (Camera)</div><div className="text-xs text-white/40 mt-1">Adaptive Control</div></div>
+          <div className={clsx("w-11 h-6 rounded-full relative transition-colors border border-white/10", userSettings.cameraVitalsEnabled ? "bg-white" : "bg-white/10")}>
+            <input type="checkbox" checked={userSettings.cameraVitalsEnabled} onChange={handleCameraToggle} className="sr-only" />
+            <div className={clsx("absolute top-1 left-1 w-4 h-4 rounded-full shadow-sm transition-transform", userSettings.cameraVitalsEnabled ? "bg-black translate-x-5" : "bg-white/50 translate-x-0")} />
+          </div>
+        </label>
+      </div >
+    </section >
 
-              <button onClick={handleChangeKey} className="w-full p-4 bg-white/5 rounded-xl flex items-center gap-3 text-white/60 hover:text-white hover:bg-white/10 transition-colors"><Key size={16} /><span className="text-xs font-mono">{hasApiKey ? "Change API Key" : "Select API Key"}</span></button>
-              <div className="grid grid-cols-2 gap-3">
-                <button onClick={() => { triggerHaptic(); toggleKernelMonitor(); setSettingsOpen(false); }} className="p-4 bg-white/5 rounded-xl flex items-center gap-3 text-white/60 hover:text-white hover:bg-white/10 transition-colors"><Terminal size={16} /><span className="text-xs font-mono">Kernel Monitor</span></button>
-                <button onClick={() => { triggerHaptic(); setShowHolodeck(true); }} className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-xl flex items-center gap-3 text-purple-300 hover:text-white hover:bg-purple-500/20 transition-colors"><TestTube2 size={16} /><span className="text-xs font-mono">Run Holodeck</span></button>
+        <WearableSection triggerHaptic={triggerHaptic} />
+
+        <section>
+          <div className="text-white/30 font-caps text-[9px] tracking-[0.2em] mb-4 flex items-center gap-2 pl-1">Advanced Intelligence</div>
+          <div className="space-y-3">
+            <label className="flex items-center justify-between p-5 bg-gradient-to-r from-purple-500/10 to-blue-500/10 rounded-[1.5rem] border border-white/10 cursor-pointer hover:border-white/20 transition-colors">
+              <div>
+                <div className="text-sm font-bold text-white flex items-center gap-2"><Sparkles size={14} className="text-purple-400" />Gemini Neuro-Somatic AI</div>
+                <div className="text-[10px] text-white/50 mt-1 max-w-[200px]">Real-time voice coaching & adaptive protocol generation.</div>
+                <div className="flex gap-2 mt-2">
+                  <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[9px] text-white/30 hover:text-white/60" onClick={(e) => e.stopPropagation()}>Pricing Info <ExternalLink size={8} /></a>
+                </div>
               </div>
-              <button onClick={handleResetLocks} className="w-full p-4 bg-white/5 rounded-xl flex items-center gap-3 text-white/60 hover:text-red-300 hover:bg-red-500/10 transition-colors group"><ShieldAlert size={16} className="group-hover:text-red-400" /><span className="text-xs font-mono">Reset Safety Locks</span></button>
-            </div>
-          </section>
+              <div className={clsx("w-11 h-6 rounded-full relative transition-colors border border-white/10", userSettings.aiCoachEnabled ? "bg-purple-500" : "bg-white/10")}>
+                <input type="checkbox" checked={userSettings.aiCoachEnabled} onChange={handleAiToggle} className="sr-only" />
+                <div className={clsx("absolute top-1 left-1 w-4 h-4 rounded-full shadow-sm transition-transform bg-white", userSettings.aiCoachEnabled ? "translate-x-5" : "translate-x-0")} />
+              </div>
+            </label>
 
-          <div className="pt-8 text-center"><div className="text-[10px] text-white/20 font-mono">ZenB Kernel v6.5 (Holodeck Enabled)</div></div>
-        </div>
-      </GestureBottomSheet>
+            <button onClick={handleChangeKey} className="w-full p-4 bg-white/5 rounded-xl flex items-center gap-3 text-white/60 hover:text-white hover:bg-white/10 transition-colors"><Key size={16} /><span className="text-xs font-mono">{hasApiKey ? "Change API Key" : "Select API Key"}</span></button>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => { triggerHaptic(); toggleKernelMonitor(); setSettingsOpen(false); }} className="p-4 bg-white/5 rounded-xl flex items-center gap-3 text-white/60 hover:text-white hover:bg-white/10 transition-colors"><Terminal size={16} /><span className="text-xs font-mono">Kernel Monitor</span></button>
+              <button onClick={() => { triggerHaptic(); setShowHolodeck(true); }} className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-xl flex items-center gap-3 text-purple-300 hover:text-white hover:bg-purple-500/20 transition-colors"><TestTube2 size={16} /><span className="text-xs font-mono">Run Holodeck</span></button>
+            </div>
+            <button onClick={handleResetLocks} className="w-full p-4 bg-white/5 rounded-xl flex items-center gap-3 text-white/60 hover:text-red-300 hover:bg-red-500/10 transition-colors group"><ShieldAlert size={16} className="group-hover:text-red-400" /><span className="text-xs font-mono">Reset Safety Locks</span></button>
+          </div>
+        </section>
+
+        <div className="pt-8 text-center"><div className="text-[10px] text-white/20 font-mono">ZenB Kernel v6.5 (Holodeck Enabled)</div></div>
+      </div >
+    </GestureBottomSheet >
     </>
   );
 }

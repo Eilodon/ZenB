@@ -136,6 +136,8 @@ export type UserSettings = {
   showKernelMonitor: boolean;
   aiCoachEnabled: boolean;
   coachingEnabled: boolean; // In-session coaching messages
+  hasPassphrase: boolean; // P1 Security Fix
+  passphraseHash: string | null; // P1 Security Fix: SHA-256 hash for verification
   apiKey?: string;
   developerMode?: boolean;
 };

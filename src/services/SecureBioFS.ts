@@ -31,6 +31,10 @@
 
 import { KernelEvent } from '../types';
 
+// --- ROTATION POLICY ---
+const MAX_LOG_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+const MAX_LOG_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
 // --- CRYPTO UTILITIES ---
 
 class CryptoService {
@@ -213,6 +217,9 @@ export class SecureBioFS {
     // Initialize IndexedDB backend
     await this.initIndexedDB();
 
+    // Perform log rotation/cleanup
+    await this.rotateIfNeeded();
+
     this.isInitialized = true;
     console.log('[SecureBioFS] Initialized with encrypted IndexedDB backend');
   }
@@ -316,6 +323,93 @@ export class SecureBioFS {
         db.createObjectStore('meta');
       }
     });
+  }
+
+  // --- LOG ROTATION & CLEANUP ---
+
+  /**
+   * Calculate approximate log size in bytes
+   */
+  private async getLogSize(): Promise<number> {
+    if (!this.db) return 0;
+
+    const tx = this.db.transaction('event_log', 'readonly');
+    const allEvents: EncryptedEvent[] = await tx.store.getAll();
+
+    // Approximate size: sum of ciphertext + iv + signature lengths
+    let totalSize = 0;
+    for (const event of allEvents) {
+      totalSize += event.ciphertext.length;
+      totalSize += event.iv.length;
+      totalSize += event.signature.length;
+      totalSize += 100; // Overhead for metadata
+    }
+
+    return totalSize;
+  }
+
+  /**
+   * Remove events older than MAX_LOG_AGE_MS
+   */
+  private async cleanupOldEvents(): Promise<void> {
+    if (!this.db) return;
+
+    const cutoffTime = Date.now() - MAX_LOG_AGE_MS;
+
+    const tx = this.db.transaction('event_log', 'readwrite');
+    const index = tx.store.index('timestamp');
+    const range = IDBKeyRange.upperBound(cutoffTime);
+
+    let cursor = await index.openCursor(range);
+    let deletedCount = 0;
+
+    while (cursor) {
+      await cursor.delete();
+      deletedCount++;
+      cursor = await cursor.continue();
+    }
+
+    await tx.done;
+
+    if (deletedCount > 0) {
+      console.log(`[SecureBioFS] Cleaned up ${deletedCount} events older than 7 days`);
+    }
+  }
+
+  /**
+   * Rotate log if size or age limits exceeded
+   */
+  private async rotateIfNeeded(): Promise<void> {
+    if (!this.db) return;
+
+    // 1. Cleanup old events first
+    await this.cleanupOldEvents();
+
+    // 2. Check size after cleanup
+    const currentSize = await this.getLogSize();
+
+    if (currentSize > MAX_LOG_SIZE_BYTES) {
+      console.warn(`[SecureBioFS] Log size ${(currentSize / 1024 / 1024).toFixed(2)}MB exceeds limit. Removing oldest events.`);
+
+      // Remove oldest 25% of events
+      const tx = this.db.transaction('event_log', 'readwrite');
+      const index = tx.store.index('timestamp');
+      const allEvents: EncryptedEvent[] = await index.getAll();
+
+      const removeCount = Math.floor(allEvents.length * 0.25);
+
+      // Sort by timestamp ascending (oldest first)
+      allEvents.sort((a, b) => a.timestamp - b.timestamp);
+
+      // Delete oldest events
+      for (let i = 0; i < removeCount; i++) {
+        await tx.store.delete(allEvents[i].id);
+      }
+
+      await tx.done;
+
+      console.log(`[SecureBioFS] Removed ${removeCount} oldest events to free space`);
+    }
   }
 
   // --- UTILITIES ---

@@ -1,9 +1,12 @@
 
 import { useState } from 'react';
-import { Award, Clock, Play, ArrowRight } from 'lucide-react';
+import { Award, Clock, Play, ArrowRight, Shield } from 'lucide-react';
 import clsx from 'clsx';
 import { unlockAudio } from '../../services/audio';
 import { TRANSLATIONS } from '../../translations';
+import { PassphraseSetup } from '../PassphraseSetup';
+import { useSettingsStore } from '../../stores/settingsStore';
+
 
 type Props = {
   onComplete: () => void;
@@ -12,18 +15,51 @@ type Props = {
 
 export const OnboardingModal = ({ onComplete, t }: Props) => {
   const [step, setStep] = useState(0);
+  const [showPassphraseSetup, setShowPassphraseSetup] = useState(false);
+  const setPassphrase = useSettingsStore(s => s.setPassphrase);
 
   const steps = [
     { title: t.ui.welcome, text: t.ui.welcomeDesc, icon: <Award size={32} className="text-white/80" /> },
     { title: t.ui.findRhythm, text: t.ui.findRhythmDesc, icon: <Clock size={32} className="text-white/80" /> },
-    { title: t.ui.breatheLight, text: t.ui.breatheLightDesc, icon: <Play size={32} className="text-white/80" /> }
+    { title: t.ui.breatheLight, text: t.ui.breatheLightDesc, icon: <Play size={32} className="text-white/80" /> },
+    {
+      title: 'Secure Your Data',
+      text: 'Encrypt your biometric data with a passphrase for maximum security.',
+      icon: <Shield size={32} className="text-white/80" />
+    }
   ];
 
   const handleNext = () => {
     unlockAudio();
-    if (step < steps.length - 1) setStep(step + 1);
-    else onComplete();
+    if (step < steps.length - 1) {
+      // If moving to security step, show PassphraseSetup
+      if (step === steps.length - 2) {
+        setShowPassphraseSetup(true);
+      } else {
+        setStep(step + 1);
+      }
+    } else {
+      onComplete();
+    }
   };
+
+  const handlePassphraseComplete = async (passphrase: string | null) => {
+    if (passphrase) {
+      await setPassphrase(passphrase);
+    }
+    // null = user chose device fingerprint
+    setShowPassphraseSetup(false);
+    onComplete();
+  };
+
+  const handleSkipSecurity = () => {
+    setShowPassphraseSetup(false);
+    onComplete();
+  };
+
+  if (showPassphraseSetup) {
+    return <PassphraseSetup onComplete={handlePassphraseComplete} onCancel={handleSkipSecurity} />;
+  }
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-3xl animate-in fade-in duration-1000" role="dialog" aria-modal="true">
