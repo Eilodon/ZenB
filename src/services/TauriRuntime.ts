@@ -18,6 +18,8 @@ import type {
     FfiFrame,
     FfiSessionStats,
     FfiRuntimeState,
+    FfiBeliefState,
+    FfiSafetyStatus,
 } from './RustKernelBridge';
 
 let invokeFunc: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
@@ -179,6 +181,48 @@ export class TauriZenOneRuntime {
     async reset_safety_lock(): Promise<void> {
         if (!invokeFunc) throw new Error('Tauri not initialized');
         await invokeFunc('reset_safety_lock');
+    }
+
+    // =========================================================================
+    // NEW COMMANDS (v2 - Full Rust Core Utilization)
+    // =========================================================================
+
+    /**
+     * Get current belief state directly from Rust engine.
+     * Use this for AI/ML integration that needs belief probabilities.
+     */
+    async get_belief(): Promise<FfiBeliefState> {
+        if (!invokeFunc) throw new Error('Tauri not initialized');
+        return invokeFunc('get_belief') as Promise<FfiBeliefState>;
+    }
+
+    /**
+     * Get safety status (lock state, bounds, trauma count).
+     */
+    async get_safety_status(): Promise<FfiSafetyStatus> {
+        if (!invokeFunc) throw new Error('Tauri not initialized');
+        return invokeFunc('get_safety_status') as Promise<FfiSafetyStatus>;
+    }
+
+    /**
+     * Update context for adaptive recommendations.
+     * Call this periodically (e.g., on session start) to help the Engine
+     * adapt its recommendations based on:
+     * - Time of day (circadian rhythm)
+     * - Device charging state (proxy for activity)
+     * - Recent session count (fatigue/overuse detection)
+     */
+    async update_context(
+        localHour: number,
+        isCharging: boolean,
+        recentSessions: number
+    ): Promise<void> {
+        if (!invokeFunc) throw new Error('Tauri not initialized');
+        await invokeFunc('update_context', {
+            localHour: Math.floor(localHour) % 24,
+            isCharging,
+            recentSessions: Math.min(recentSessions, 65535), // u16 max
+        });
     }
 }
 
