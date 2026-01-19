@@ -142,3 +142,63 @@ interface ZenOneRuntime {
     void emergency_halt(string reason);
     void reset_safety_lock();
 };
+
+// ============================================================================
+// SAFETY MONITOR
+// ============================================================================
+
+enum FfiViolationSeverity {
+    "Warning",
+    "Error",
+    "Critical",
+};
+
+enum FfiKernelEventType {
+    "StartSession",
+    "StopSession",
+    "LoadPattern",
+    "AdjustTempo",
+    "EmergencyHalt",
+    "Tick",
+    "PhaseChange",
+    "CycleComplete",
+};
+
+dictionary FfiSafetyViolation {
+    string spec_name;
+    string description;
+    FfiViolationSeverity severity;
+    i64 timestamp_ms;
+    string? corrective_action;
+};
+
+dictionary FfiKernelEvent {
+    FfiKernelEventType event_type;
+    i64 timestamp_ms;
+    string? payload;
+};
+
+dictionary FfiSafetyCheckResult {
+    boolean is_safe;
+    sequence<FfiSafetyViolation> violations;
+    FfiKernelEvent? corrected_event;
+};
+
+interface SafetyMonitor {
+    constructor();
+
+    // Check an event against safety specs
+    FfiSafetyCheckResult check_event(FfiKernelEvent event, FfiRuntimeState runtime_state);
+
+    // Get all recorded violations
+    sequence<FfiSafetyViolation> get_violations();
+
+    // Get recent violations
+    sequence<FfiSafetyViolation> get_recent_violations(u32 count);
+
+    // Clear violation history
+    void clear_violations();
+
+    // Check if system is in safe state
+    boolean is_safe(FfiRuntimeState runtime_state);
+};

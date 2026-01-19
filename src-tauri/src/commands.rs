@@ -163,3 +163,63 @@ pub fn reset_safety_lock(state: State<RuntimeState>) {
     let runtime = state.0.lock().unwrap();
     runtime.reset_safety_lock();
 }
+
+// =============================================================================
+// SAFETY MONITOR COMMANDS
+// =============================================================================
+
+use zenone_ffi::{
+    FfiKernelEvent, FfiSafetyCheckResult, FfiSafetyViolation, SafetyMonitor,
+};
+
+/// Managed state: holds the SafetyMonitor singleton.
+pub struct SafetyMonitorState(pub Mutex<SafetyMonitor>);
+
+/// Check an event against safety specs.
+#[tauri::command]
+pub fn check_safety_event(
+    runtime_state: State<RuntimeState>,
+    safety_state: State<SafetyMonitorState>,
+    event: FfiKernelEvent,
+) -> FfiSafetyCheckResult {
+    let runtime = runtime_state.0.lock().unwrap();
+    let safety = safety_state.0.lock().unwrap();
+    let state = runtime.get_state();
+    safety.check_event(event, state)
+}
+
+/// Get all safety violations.
+#[tauri::command]
+pub fn get_safety_violations(state: State<SafetyMonitorState>) -> Vec<FfiSafetyViolation> {
+    let safety = state.0.lock().unwrap();
+    safety.get_violations()
+}
+
+/// Get recent safety violations.
+#[tauri::command]
+pub fn get_recent_safety_violations(
+    state: State<SafetyMonitorState>,
+    count: u32,
+) -> Vec<FfiSafetyViolation> {
+    let safety = state.0.lock().unwrap();
+    safety.get_recent_violations(count)
+}
+
+/// Clear safety violation history.
+#[tauri::command]
+pub fn clear_safety_violations(state: State<SafetyMonitorState>) {
+    let safety = state.0.lock().unwrap();
+    safety.clear_violations();
+}
+
+/// Check if system is in safe state.
+#[tauri::command]
+pub fn is_system_safe(
+    runtime_state: State<RuntimeState>,
+    safety_state: State<SafetyMonitorState>,
+) -> bool {
+    let runtime = runtime_state.0.lock().unwrap();
+    let safety = safety_state.0.lock().unwrap();
+    let state = runtime.get_state();
+    safety.is_safe(state)
+}

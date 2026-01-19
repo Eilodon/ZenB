@@ -852,3 +852,256 @@ impl ZenOneRuntime {
         log::info!("Safety lock reset");
     }
 }
+
+// ============================================================================
+// SAFETY MONITOR - LTL VERIFICATION
+// ============================================================================
+
+/// Safety violation severity
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FfiViolationSeverity {
+    Warning,
+    Error,
+    Critical,
+}
+
+/// A recorded safety violation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FfiSafetyViolation {
+    pub spec_name: String,
+    pub description: String,
+    pub severity: FfiViolationSeverity,
+    pub timestamp_ms: i64,
+    pub corrective_action: Option<String>,
+}
+
+/// Event types that can be checked by safety monitor
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum FfiKernelEventType {
+    StartSession,
+    StopSession,
+    LoadPattern,
+    AdjustTempo,
+    EmergencyHalt,
+    Tick,
+    PhaseChange,
+    CycleComplete,
+}
+
+/// An event to be verified by safety monitor
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FfiKernelEvent {
+    pub event_type: FfiKernelEventType,
+    pub timestamp_ms: i64,
+    pub payload: Option<String>,
+}
+
+/// Result of safety check
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FfiSafetyCheckResult {
+    pub is_safe: bool,
+    pub violations: Vec<FfiSafetyViolation>,
+    pub corrected_event: Option<FfiKernelEvent>,
+}
+
+/// Safety Monitor with LTL verification
+pub struct SafetyMonitor {
+    inner: Mutex<SafetyMonitorInner>,
+}
+
+struct SafetyMonitorInner {
+    /// Event trace for temporal checks
+    trace: std::collections::VecDeque<FfiKernelEvent>,
+    /// Recorded violations
+    violations: Vec<FfiSafetyViolation>,
+    /// Last tempo value for rate limiting
+    last_tempo: f32,
+    /// Last tempo change timestamp
+    last_tempo_change_ms: i64,
+    /// Last pattern change timestamp
+    last_pattern_change_ms: i64,
+    /// Maximum trace size
+    max_trace_size: usize,
+}
+
+impl SafetyMonitor {
+    /// Create a new safety monitor
+    pub fn new() -> Self {
+        SafetyMonitor {
+            inner: Mutex::new(SafetyMonitorInner {
+                trace: std::collections::VecDeque::with_capacity(100),
+                violations: Vec::new(),
+                last_tempo: 1.0,
+                last_tempo_change_ms: 0,
+                last_pattern_change_ms: 0,
+                max_trace_size: 100,
+            }),
+        }
+    }
+
+    /// Check an event against all safety specs
+    /// Returns safety check result with any violations and corrections
+    pub fn check_event(
+        &self,
+        event: FfiKernelEvent,
+        runtime_state: FfiRuntimeState,
+    ) -> FfiSafetyCheckResult {
+        let mut inner = self.inner.lock();
+        let mut violations = Vec::new();
+        let mut corrected_event = None;
+
+        // Add event to trace
+        inner.trace.push_back(event.clone());
+        if inner.trace.len() > inner.max_trace_size {
+            inner.trace.pop_front();
+        }
+
+        // === SAFETY SPEC 1: Tempo Bounds ===
+        // G(tempo >= 0.8 && tempo <= 1.4)
+        if runtime_state.tempo_scale < 0.8 || runtime_state.tempo_scale > 1.4 {
+            violations.push(FfiSafetyViolation {
+                spec_name: "tempo_bounds".to_string(),
+                description: format!(
+                    "Tempo {} outside safe range [0.8, 1.4]",
+                    runtime_state.tempo_scale
+                ),
+                severity: FfiViolationSeverity::Error,
+                timestamp_ms: event.timestamp_ms,
+                corrective_action: Some("Clamp tempo to safe range".to_string()),
+            });
+        }
+
+        // === SAFETY SPEC 2: Safety Lock Immutability ===
+        // G(status == SAFETY_LOCK -> !StartSession)
+        if runtime_state.status == FfiRuntimeStatus::SafetyLock {
+            if matches!(event.event_type, FfiKernelEventType::StartSession) {
+                violations.push(FfiSafetyViolation {
+                    spec_name: "safety_lock_immutable".to_string(),
+                    description: "Cannot start session while safety locked".to_string(),
+                    severity: FfiViolationSeverity::Critical,
+                    timestamp_ms: event.timestamp_ms,
+                    corrective_action: Some("Block event".to_string()),
+                });
+                // Block event
+                corrected_event = None;
+            }
+        }
+
+        // === SAFETY SPEC 3: Tempo Rate Limit ===
+        // G(|d(tempo)/dt| <= 0.1/sec)
+        if matches!(event.event_type, FfiKernelEventType::AdjustTempo) {
+            let dt_sec = (event.timestamp_ms - inner.last_tempo_change_ms) as f32 / 1000.0;
+            if dt_sec > 0.0 {
+                let tempo_delta = (runtime_state.tempo_scale - inner.last_tempo).abs();
+                let rate = tempo_delta / dt_sec;
+                
+                if rate > 0.1 {
+                    violations.push(FfiSafetyViolation {
+                        spec_name: "tempo_rate_limit".to_string(),
+                        description: format!(
+                            "Tempo changing too fast: {:.3}/sec (max 0.1/sec)",
+                            rate
+                        ),
+                        severity: FfiViolationSeverity::Warning,
+                        timestamp_ms: event.timestamp_ms,
+                        corrective_action: Some("Rate-limit tempo change".to_string()),
+                    });
+                }
+            }
+            inner.last_tempo = runtime_state.tempo_scale;
+            inner.last_tempo_change_ms = event.timestamp_ms;
+        }
+
+        // === SAFETY SPEC 4: Pattern Stability ===
+        // G(LoadPattern -> X^60s(!LoadPattern))
+        if matches!(event.event_type, FfiKernelEventType::LoadPattern) {
+            let dt_sec = (event.timestamp_ms - inner.last_pattern_change_ms) as f32 / 1000.0;
+            if dt_sec < 60.0 && inner.last_pattern_change_ms > 0 {
+                violations.push(FfiSafetyViolation {
+                    spec_name: "pattern_stability".to_string(),
+                    description: format!(
+                        "Pattern changed too soon ({:.1}s < 60s min)",
+                        dt_sec
+                    ),
+                    severity: FfiViolationSeverity::Warning,
+                    timestamp_ms: event.timestamp_ms,
+                    corrective_action: None,
+                });
+            }
+            inner.last_pattern_change_ms = event.timestamp_ms;
+        }
+
+        // === SAFETY SPEC 5: Panic Halt ===
+        // G(prediction_error > 0.8 -> F EmergencyHalt)
+        if runtime_state.belief.uncertainty > 0.8 {
+            // Check if emergency halt was recently triggered
+            let has_recent_halt = inner.trace.iter().rev().take(10).any(|e| {
+                matches!(e.event_type, FfiKernelEventType::EmergencyHalt)
+            });
+            
+            if !has_recent_halt && !matches!(event.event_type, FfiKernelEventType::EmergencyHalt) {
+                violations.push(FfiSafetyViolation {
+                    spec_name: "panic_halt".to_string(),
+                    description: "High uncertainty detected, emergency halt recommended".to_string(),
+                    severity: FfiViolationSeverity::Critical,
+                    timestamp_ms: event.timestamp_ms,
+                    corrective_action: Some("Trigger emergency halt".to_string()),
+                });
+            }
+        }
+
+        // Record violations
+        for v in &violations {
+            inner.violations.push(v.clone());
+        }
+
+        FfiSafetyCheckResult {
+            is_safe: violations.is_empty(),
+            violations,
+            corrected_event,
+        }
+    }
+
+    /// Get all recorded violations
+    pub fn get_violations(&self) -> Vec<FfiSafetyViolation> {
+        self.inner.lock().violations.clone()
+    }
+
+    /// Get recent violations (last N)
+    pub fn get_recent_violations(&self, count: u32) -> Vec<FfiSafetyViolation> {
+        let inner = self.inner.lock();
+        inner.violations.iter()
+            .rev()
+            .take(count as usize)
+            .cloned()
+            .collect()
+    }
+
+    /// Clear violation history
+    pub fn clear_violations(&self) {
+        self.inner.lock().violations.clear();
+    }
+
+    /// Get violation count by severity
+    pub fn get_violation_counts(&self) -> (u32, u32, u32) {
+        let inner = self.inner.lock();
+        let warnings = inner.violations.iter()
+            .filter(|v| v.severity == FfiViolationSeverity::Warning)
+            .count() as u32;
+        let errors = inner.violations.iter()
+            .filter(|v| v.severity == FfiViolationSeverity::Error)
+            .count() as u32;
+        let criticals = inner.violations.iter()
+            .filter(|v| v.severity == FfiViolationSeverity::Critical)
+            .count() as u32;
+        (warnings, errors, criticals)
+    }
+
+    /// Check if system is in safe state
+    pub fn is_safe(&self, runtime_state: FfiRuntimeState) -> bool {
+        // Basic safety checks without event context
+        runtime_state.tempo_scale >= 0.8 
+            && runtime_state.tempo_scale <= 1.4
+            && runtime_state.status != FfiRuntimeStatus::SafetyLock
+    }
+}

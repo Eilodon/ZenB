@@ -860,7 +860,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73f88a1307638156682bada9d7604135552957b7818057dcef22705b4d509495"
 dependencies = [
  "num-traits",
- "serde",
 ]
 
 [[package]]
@@ -1802,11 +1801,9 @@ dependencies = [
  "blake3",
  "chrono",
  "config",
- "lazy_static",
  "log",
  "lru",
  "nalgebra",
- "ndarray",
  "num-complex",
  "parking_lot",
  "rand",
@@ -1816,7 +1813,6 @@ dependencies = [
  "thiserror",
  "toml 0.8.23",
  "uuid",
- "zenb-signals",
 ]
 
 [[package]]
@@ -1839,7 +1835,6 @@ dependencies = [
  "chrono",
  "hex",
  "hkdf",
- "log",
  "rand",
  "rusqlite",
  "serde",

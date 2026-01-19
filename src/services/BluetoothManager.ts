@@ -125,7 +125,7 @@ export class BluetoothManager {
         const hasWebBluetooth = typeof navigator !== 'undefined' && !!navigator.bluetooth;
         const runtime = detectRuntime();
 
-        if (!hasWebBluetooth && runtime !== 'capacitor') {
+        if (!hasWebBluetooth && runtime !== 'capacitor' && runtime !== 'tauri') {
             console.error('[Bluetooth] Bluetooth not supported in this runtime');
             this.lastError = { code: 'NOT_SUPPORTED', message: 'Bluetooth not supported in this runtime' };
             this.updateState('ERROR');
@@ -277,7 +277,7 @@ export class BluetoothManager {
                     this.capDeviceId,
                     webUUIDToString(BluetoothManager.HR_SERVICE),
                     webUUIDToString(BluetoothManager.HR_MEASUREMENT),
-                    (value) => {
+                    (value: DataView) => {
                         this.valueListeners.forEach((cb) => {
                             try { cb(webUUIDToString(BluetoothManager.HR_MEASUREMENT), value); } catch { }
                         });

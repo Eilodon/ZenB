@@ -224,6 +224,87 @@ export class TauriZenOneRuntime {
             recentSessions: Math.min(recentSessions, 65535), // u16 max
         });
     }
+
+    // =========================================================================
+    // SAFETY MONITOR COMMANDS (v3 - Full Rust Safety Verification)
+    // =========================================================================
+
+    /**
+     * Check an event against all safety specs.
+     * Returns safety check result with any violations and corrections.
+     */
+    async checkSafetyEvent(event: FfiKernelEvent): Promise<FfiSafetyCheckResult> {
+        if (!invokeFunc) throw new Error('Tauri not initialized');
+        return invokeFunc('check_safety_event', { event }) as Promise<FfiSafetyCheckResult>;
+    }
+
+    /**
+     * Get all recorded safety violations.
+     */
+    async getSafetyViolations(): Promise<FfiSafetyViolation[]> {
+        if (!invokeFunc) throw new Error('Tauri not initialized');
+        return invokeFunc('get_safety_violations') as Promise<FfiSafetyViolation[]>;
+    }
+
+    /**
+     * Get recent safety violations.
+     */
+    async getRecentSafetyViolations(count: number): Promise<FfiSafetyViolation[]> {
+        if (!invokeFunc) throw new Error('Tauri not initialized');
+        return invokeFunc('get_recent_safety_violations', { count }) as Promise<FfiSafetyViolation[]>;
+    }
+
+    /**
+     * Clear safety violation history.
+     */
+    async clearSafetyViolations(): Promise<void> {
+        if (!invokeFunc) throw new Error('Tauri not initialized');
+        await invokeFunc('clear_safety_violations');
+    }
+
+    /**
+     * Check if system is in safe state.
+     */
+    async isSystemSafe(): Promise<boolean> {
+        if (!invokeFunc) throw new Error('Tauri not initialized');
+        return invokeFunc('is_system_safe') as Promise<boolean>;
+    }
+}
+
+// ============================================================================
+// FFI SAFETY TYPES
+// ============================================================================
+
+export type FfiViolationSeverity = 'Warning' | 'Error' | 'Critical';
+
+export type FfiKernelEventType =
+    | 'StartSession'
+    | 'StopSession'
+    | 'LoadPattern'
+    | 'AdjustTempo'
+    | 'EmergencyHalt'
+    | 'Tick'
+    | 'PhaseChange'
+    | 'CycleComplete';
+
+export interface FfiSafetyViolation {
+    spec_name: string;
+    description: string;
+    severity: FfiViolationSeverity;
+    timestamp_ms: number;
+    corrective_action: string | null;
+}
+
+export interface FfiKernelEvent {
+    event_type: FfiKernelEventType;
+    timestamp_ms: number;
+    payload: string | null;
+}
+
+export interface FfiSafetyCheckResult {
+    is_safe: boolean;
+    violations: FfiSafetyViolation[];
+    corrected_event: FfiKernelEvent | null;
 }
 
 // Singleton instance
