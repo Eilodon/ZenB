@@ -321,7 +321,19 @@ export class SecureBioFS {
   // --- UTILITIES ---
 
   private async getDeviceFingerprint(): Promise<string> {
-    // Simple device fingerprint (not cryptographically secure, but sufficient for key derivation)
+    // ⚠️ SECURITY WARNING: This fingerprint provides WEAK security!
+    // It can be guessed/replicated by an attacker who knows:
+    // - User agent (public)
+    // - Screen resolution (common values)
+    // - Timezone (guessable from location)
+    //
+    // For production: Require user-provided passphrase or WebAuthn
+    // This is intentionally kept as convenience-only for development.
+    console.warn(
+      '[SecureBioFS] Using device fingerprint for encryption. ' +
+      'This provides convenience, NOT strong security. ' +
+      'Enable user passphrase for production deployments.'
+    );
     const ua = navigator.userAgent;
     const screen = `${window.screen.width}x${window.screen.height}`;
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;

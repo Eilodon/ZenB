@@ -2,6 +2,11 @@ import { GoogleGenAI, LiveServerMessage, Modality, Type, Tool } from "@google/ge
 import { PureZenBKernel } from './RustKernelBridge';
 import { ToolExecutor } from './AIToolRegistry';
 
+// --- SECURITY CONSTANTS ---
+// Max audio payload size: 5 seconds of 24kHz 16-bit audio = ~240KB
+// This prevents DoS attacks from malicious/compromised Gemini endpoints
+const MAX_AUDIO_PAYLOAD_BYTES = 256 * 1024; // 256KB hard limit
+
 // --- AUDIO UTILS (PCM 16-bit, 16kHz/24kHz) ---
 
 function floatTo16BitPCM(input: Float32Array): Int16Array {
@@ -261,9 +266,24 @@ export class GeminiSomaticBridge {
     // 1. Handle Audio Output
     const audioData = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
     if (audioData) {
+      // SECURITY: Validate audio payload size before processing
+      // Base64 encoding increases size by ~33%, so original bytes = base64.length * 0.75
+      const estimatedBytes = audioData.length * 0.75;
+      if (estimatedBytes > MAX_AUDIO_PAYLOAD_BYTES) {
+        console.error(`[ZenB Bridge] SECURITY: Audio payload too large (${Math.round(estimatedBytes / 1024)}KB). Rejected.`);
+        return;
+      }
+
       this.kernel.dispatch({ type: 'AI_STATUS_CHANGE', status: 'speaking', timestamp: Date.now() });
 
       const audioBytes = base64ToUint8Array(audioData);
+
+      // Double-check actual decoded size
+      if (audioBytes.length > MAX_AUDIO_PAYLOAD_BYTES) {
+        console.error(`[ZenB Bridge] SECURITY: Decoded audio too large (${Math.round(audioBytes.length / 1024)}KB). Rejected.`);
+        return;
+      }
+
       const float32 = new Float32Array(audioBytes.length / 2);
       const view = new DataView(audioBytes.buffer);
       for (let i = 0; i < audioBytes.length / 2; i++) {
