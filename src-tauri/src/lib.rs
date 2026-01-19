@@ -27,7 +27,10 @@ pub fn run() {
             commands::process_frame,
             // State queries
             commands::get_state,
-            // Control
+            commands::get_belief,
+            commands::get_safety_status,
+            // Context & Control
+            commands::update_context,
             commands::adjust_tempo,
             commands::emergency_halt,
             commands::reset_safety_lock,

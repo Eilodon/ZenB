@@ -6,7 +6,8 @@ use std::sync::Mutex;
 use tauri::State;
 
 use zenone_ffi::{
-    FfiBreathPattern, FfiFrame, FfiRuntimeState, FfiSessionStats, ZenOneError, ZenOneRuntime,
+    FfiBeliefState, FfiBreathPattern, FfiFrame, FfiRuntimeState, FfiSafetyStatus,
+    FfiSessionStats, ZenOneRuntime,
 };
 
 /// Managed state: holds the ZenOneRuntime singleton.
@@ -111,9 +112,36 @@ pub fn get_state(state: State<RuntimeState>) -> FfiRuntimeState {
     runtime.get_state()
 }
 
+/// Get current belief state (for AI/ML integration).
+#[tauri::command]
+pub fn get_belief(state: State<RuntimeState>) -> FfiBeliefState {
+    let runtime = state.0.lock().unwrap();
+    runtime.get_belief()
+}
+
+/// Get safety status (lock state, bounds, trauma count).
+#[tauri::command]
+pub fn get_safety_status(state: State<RuntimeState>) -> FfiSafetyStatus {
+    let runtime = state.0.lock().unwrap();
+    runtime.get_safety_status()
+}
+
 // =============================================================================
-// CONTROL
+// CONTEXT & CONTROL
 // =============================================================================
+
+/// Update context (time of day, device state, session history).
+/// This helps the Engine adapt its recommendations.
+#[tauri::command]
+pub fn update_context(
+    state: State<RuntimeState>,
+    local_hour: u8,
+    is_charging: bool,
+    recent_sessions: u16,
+) {
+    let runtime = state.0.lock().unwrap();
+    runtime.update_context(local_hour, is_charging, recent_sessions);
+}
 
 /// Adjust tempo scale.
 #[tauri::command]
