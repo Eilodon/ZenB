@@ -23,12 +23,19 @@ import {
     BREATHING_PATTERNS
 } from '../types';
 
-// Advanced services
+// Advanced services (DEPRECATED - now using Rust core)
+// These are kept as fallbacks for non-Tauri environments
 import { SafetyMonitor } from './SafetyMonitor';
 import { UKFStateEstimator } from './UKFStateEstimator';
 
-// Tauri integration
-import { initTauriInvoke, getTauriRuntime, TauriZenOneRuntime } from './TauriRuntime';
+// Tauri integration (includes Rust SafetyMonitor API)
+import {
+    initTauriInvoke,
+    getTauriRuntime,
+    TauriZenOneRuntime,
+    type FfiKernelEvent,
+    type FfiKernelEventType,
+} from './TauriRuntime';
 
 // ============================================================================
 // FFI TYPE DEFINITIONS (matches rust-core/src/zenone.udl)
@@ -455,6 +462,23 @@ export class RustKernelBridge {
         const beforeState = this.state;
 
         // SAFETY CHECK: Verify event is safe before processing
+        // When Tauri is available, use Rust SafetyMonitor (async, fire-and-forget for logging)
+        // For blocking checks, use TypeScript SafetyMonitor as synchronous fallback
+        if (this._useTauri && this.tauriRuntime) {
+            // Async Rust safety check (non-blocking, logs violations)
+            const ffiEvent = this.kernelEventToFfi(event);
+            if (ffiEvent) {
+                this.tauriRuntime.checkSafetyEvent(ffiEvent).then(result => {
+                    if (!result.is_safe && result.violations.length > 0) {
+                        console.warn('[RustKernelBridge] Rust SafetyMonitor violations:', result.violations);
+                    }
+                }).catch(err => {
+                    console.warn('[RustKernelBridge] Rust safety check failed:', err);
+                });
+            }
+        }
+
+        // Synchronous TypeScript safety check (for blocking protection)
         const safetyCheck = this.safetyMonitor.checkEvent(event, this.state);
         if (!safetyCheck.safe) {
             if (safetyCheck.correctedEvent) {
@@ -705,6 +729,34 @@ export class RustKernelBridge {
     // =========================================================================
     // PRIVATE HELPERS
     // =========================================================================
+
+    /**
+     * Convert TypeScript KernelEvent to Rust FfiKernelEvent for safety verification
+     */
+    private kernelEventToFfi(event: KernelEvent): FfiKernelEvent | null {
+        const eventTypeMap: Partial<Record<KernelEvent['type'], FfiKernelEventType>> = {
+            'START_SESSION': 'StartSession',
+            'HALT': 'StopSession',
+            'LOAD_PROTOCOL': 'LoadPattern',
+            'ADJUST_TEMPO': 'AdjustTempo',
+            'SAFETY_INTERDICTION': 'EmergencyHalt',
+            'TICK': 'Tick',
+            'PHASE_TRANSITION': 'PhaseChange',
+            'CYCLE_COMPLETE': 'CycleComplete',
+        };
+
+        const ffiType = eventTypeMap[event.type];
+        if (!ffiType) {
+            // Event type not supported by Rust SafetyMonitor
+            return null;
+        }
+
+        return {
+            event_type: ffiType,
+            timestamp_ms: event.timestamp || Date.now(),
+            payload: 'patternId' in event ? (event as { patternId: string }).patternId : null,
+        };
+    }
 
     private buildState(prev?: RuntimeState, event?: KernelEvent): RuntimeState {
         const ffiState = this.runtime.get_state();

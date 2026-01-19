@@ -1,6 +1,19 @@
 /**
  * SAFETY MONITOR & SHIELD - FORMAL VERIFICATION
  * ==============================================
+ * 
+ * @deprecated This TypeScript implementation is now a FALLBACK only.
+ * The primary SafetyMonitor is implemented in Rust (rust-core/lib.rs)
+ * and is used when Tauri runtime is available. This TypeScript version
+ * is kept for:
+ * - Web/PWA environments without Rust backend
+ * - Development/testing when Tauri is not running
+ * - Synchronous blocking checks (Rust API is async)
+ * 
+ * For production on desktop/mobile, prefer the Rust SafetyMonitor via:
+ * - TauriRuntime.checkSafetyEvent()
+ * - TauriRuntime.getSafetyViolations()
+ * - TauriRuntime.isSystemSafe()
  *
  * Implements runtime verification using Linear Temporal Logic (LTL)
  * and a safety shield to prevent/correct unsafe kernel events.

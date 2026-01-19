@@ -1,6 +1,18 @@
 /**
  * UNSCENTED KALMAN FILTER (UKF) - NON-LINEAR STATE ESTIMATION
  * ============================================================
+ * 
+ * @deprecated This TypeScript implementation is now a FALLBACK only.
+ * When Tauri runtime is available, the Rust core uses its native
+ * Vinnana controller (zenb-core::belief::VinnanaController) for
+ * belief state estimation. This TypeScript version is kept for:
+ * - Web/PWA environments without Rust backend
+ * - Development/testing when Tauri is not running
+ * 
+ * The Rust implementation provides:
+ * - Higher numerical stability (no JS floating point issues)
+ * - Better performance (native code vs interpreted)
+ * - Type-safe invariants enforced at compile time
  *
  * Upgrade from Linear Kalman Filter to handle non-linear physiological dynamics:
  * - Arousal follows sigmoid saturation (not linear)
