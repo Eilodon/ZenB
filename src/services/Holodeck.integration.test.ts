@@ -25,6 +25,7 @@ const DEFAULT_SETTINGS = {
   coachingEnabled: false,
   hasPassphrase: false,
   passphraseHash: null,
+  safetyRegistry: {},
 };
 
 function resetStores() {

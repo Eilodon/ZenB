@@ -66,7 +66,7 @@ export const useSettingsStore = create<SettingsState>()(
         streak: 0,
         lastBreathDate: '',
         lastUsedPattern: '4-7-8',
-        cameraVitalsEnabled: false,
+        cameraVitalsEnabled: true, // CHANGED: Enable by default for Android testing
         showKernelMonitor: false,
         aiCoachEnabled: false, // v6.0 Default
         coachingEnabled: true,  // In-session coaching messages enabled by default

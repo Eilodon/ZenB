@@ -138,9 +138,13 @@ export default function App() {
     let tapCount = 0;
     let lastTap = 0;
 
-    const handleTap = (e: MouseEvent | TouchEvent) => {
+    const handleTap = async (e: MouseEvent | TouchEvent) => {
       // Audio Unlock
-      unlockAudio();
+      console.log('[App] Interaction: Unlocking Audio. State:', await import('tone').then(t => t.context.state));
+      unlockAudio().then(async () => {
+        const Tone = await import('tone');
+        console.log('[App] Audio Unlocked. New State:', Tone.context.state);
+      });
 
       // Secret 5-tap top-right corner to toggle Kernel Monitor
       const x = 'clientX' in e ? e.clientX : e.touches[0].clientX;

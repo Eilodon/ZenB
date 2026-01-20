@@ -109,14 +109,21 @@ export class CameraVitalsEngine {
                 await tf.ready();
                 await tf.setBackend('webgl');
 
-                this.detector = await faceLandmarksDetection.createDetector(
-                    faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh,
-                    {
-                        runtime: 'tfjs',
-                        maxFaces: 1,
-                        refineLandmarks: true
-                    }
-                );
+                try {
+                    console.log('[ZenB] Initializing FaceLandmarksDetector...');
+                    this.detector = await faceLandmarksDetection.createDetector(
+                        faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh,
+                        {
+                            runtime: 'tfjs',
+                            maxFaces: 1,
+                            refineLandmarks: true
+                        }
+                    );
+                    console.log('[ZenB] FaceLandmarksDetector initialized successfully');
+                } catch (detErr) {
+                    console.error('[ZenB] Failed to create FaceLandmarksDetector:', detErr);
+                    throw detErr;
+                }
 
                 this.worker = new Worker(new URL('./fft.worker.ts', import.meta.url), { type: 'module' });
 

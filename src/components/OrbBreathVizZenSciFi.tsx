@@ -1,7 +1,7 @@
 
 import React, { useMemo, useRef, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Environment } from '@react-three/drei';
+// import { Environment } from '@react-three/drei';
 import { EffectComposer, Bloom, DepthOfField, Vignette } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import { BreathPhase, ColorTheme, QualityTier } from '../types';
@@ -331,7 +331,7 @@ export default function OrbBreathVizZenSciFi(props: Props) {
       camera={{ position: [0, 0, 4.8], fov: 45 }}
       gl={{ antialias: tier.dpr > 1.1, alpha: true, powerPreference: 'high-performance' }}
     >
-      {tier.seg >= 44 && <Environment preset="city" />}
+      {/* tier.seg >= 44 && <Environment preset="city" /> */}
       <ambientLight intensity={0.55} />
       <pointLight position={[3, 3, 4]} intensity={1.2} />
       <ZenOrb {...props} />
